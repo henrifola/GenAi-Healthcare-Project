@@ -1,36 +1,129 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🩺 HaruCare
 
-## Getting Started
+**HaruCare** is an AI-powered healthcare companion system designed to analyze smart watch data (like Fitbit) and provide users with personalized daily insights and recommendations using Generative AI.
 
-First, run the development server:
+The goal is to make health data **understandable**, **actionable**, and **motivational** — all in natural language.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## 🚀 Features
+
+- 🔗 Integration with Fitbit/smartwatch data APIs
+- 🧠 GPT-powered daily insights and health tips
+- 📊 Interactive UI using Chakra UI
+- 🌐 Built with Next.js App Router and TypeScript
+
+---
+
+## 🛠️ Tech Stack
+
+- **Next.js (App Router)**
+- **React**
+- **TypeScript**
+- **Chakra UI**
+- **OpenAI GPT API**
+- **Fitbit API**
+- **MongoDB (future integration)**
+- **Axios (for REST API calls)**
+
+---
+
+## 📂 Folder Structure
+
+```
+healthcare-system/
+├── .next/                   ← Next.js build output
+├── .vscode/                 ← VS Code settings (optional)
+├── node_modules/            ← Dependencies
+├── public/                  ← Static files served at root (/)
+│   ├── favicon.ico
+│   ├── file.svg
+│   ├── globe.svg
+│   ├── next.svg
+│   ├── vercel.svg
+│   └── window.svg
+│
+├── src/
+│   ├── app/                 ← App Router entry point
+│   │   ├── home/
+│   │   │   └── page.tsx     ← Home page (route: "/")
+│   │   ├── layout.tsx       ← Global layout (ChakraProvider wraps here)
+│   │   └── page.tsx         ← Re-exports home/page.tsx as root
+│   │
+│   ├── components/          ← Reusable UI components
+│   ├── context/             ← React contexts (Auth, Theme, etc.)
+│   ├── hooks/               ← Custom React hooks
+│   ├── styles/              ← CSS Modules and global styles
+│   │   ├── globals.css
+│   │   └── page.module.css
+│   └── utils/               ← Helper functions
+│
+├── .gitignore
+├── eslint.config.mjs
+├── next-env.d.ts
+├── next.config.ts
+├── package.json
+├── package-lock.json
+├── tsconfig.json
+├── yarn.lock
+└── README.md
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🧰 Installation & Setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. Clone the repo
 
-## Learn More
+```bash
+git clone https://github.com/your-username/harucare.git
+cd harucare
+```
 
-To learn more about Next.js, take a look at the following resources:
+### 2. Install dependencies
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Using Yarn:
+```bash
+yarn install
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Or with npm:
+```bash
+npm install
+```
 
-## Deploy on Vercel
+### 3. Run the development server
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+yarn dev
+# or
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Open in browser
+
+Go to: [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 🧪 Testing GPT & Fitbit API (coming soon)
+
+- GPT integration will live under `src/app/api/gpt/route.ts`
+- Fitbit API calls will be handled securely through backend API routes
+
+---
+
+## 📅 Roadmap
+
+- [x] Set up Next.js App Router
+- [x] Chakra UI integration
+- [ ] Fitbit OAuth and data sync
+- [ ] GPT prompt templates and response logic
+- [ ] MongoDB integration for user history
+- [ ] User dashboard and insights page
+
+---
+
+## 🧑‍💻 Authors
+
+Built with ❤️ by HaruCare Team
