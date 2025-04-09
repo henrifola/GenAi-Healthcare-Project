@@ -126,10 +126,12 @@ Go to: [http://localhost:3000](http://localhost:3000)
 
 - [x] Set up Next.js App Router
 - [x] Chakra UI integration
+- [x] User authentication with Google OAuth
+- [x] Social features (activities & challenges)
 - [ ] Fitbit OAuth and data sync
-- [ ] GPT prompt templates and response logic
+- [ ] Integrate GPT API for generated insights
 - [ ] MongoDB integration for user history
-- [ ] User dashboard and insights page
+- [x] User dashboard
 
 ---
 
