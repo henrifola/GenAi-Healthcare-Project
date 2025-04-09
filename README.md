@@ -47,7 +47,15 @@ healthcare-system/
 │   ├── app/                 ← App Router entry point
 │   │   ├── home/
 │   │   │   └── page.tsx     ← Home page (route: "/")
-│   │   ├── layout.tsx       ← Global layout (ChakraProvider wraps here)
+│   │   ├── social/          ← Social features
+│   │   │   ├── activities/  ← Group activities
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── ClientActivitiesPage.tsx
+│   │   │   ├── challenges/  ← Weekly challenges
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx     ← Social hub page
+│   │   ├── ClientLayout.tsx ← Client-side layout with providers
+│   │   ├── layout.tsx       ← Global layout
 │   │   └── page.tsx         ← Re-exports home/page.tsx as root
 │   │
 │   ├── components/          ← Reusable UI components
@@ -55,6 +63,7 @@ healthcare-system/
 │   ├── hooks/               ← Custom React hooks
 │   ├── styles/              ← CSS Modules and global styles
 │   │   ├── globals.css
+│   │   ├── theme.ts         ← Chakra UI theme configuration
 │   │   └── page.module.css
 │   └── utils/               ← Helper functions
 │
