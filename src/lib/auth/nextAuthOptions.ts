@@ -1,7 +1,6 @@
 // lib/auth/nextAuthOptions.ts
 import type { NextAuthOptions, Session } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
-import GoogleProvider from 'next-auth/providers/google';
 
 declare module 'next-auth' {
   interface Session {
@@ -22,10 +21,6 @@ declare module 'next-auth/jwt' {
 
 export const nextAuthOptions: NextAuthOptions = {
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    }),
     // Fitbit OAuth Provider 구현
     {
       id: "fitbit",

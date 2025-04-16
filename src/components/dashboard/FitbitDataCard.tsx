@@ -87,7 +87,43 @@ const FitbitDataCard = () => {
   const initialFetchDone = useRef(false);
   const pendingRequest = useRef<Promise<any> | null>(null);
 
-  const CACHE_TIMEOUT = 5 * 60 * 1000;
+  const CACHE_TIMEOUT = 5 * 60 * 1000; // 5분
+  const CACHE_KEY_PREFIX = 'fitbit-data-';
+
+  // 로컬 스토리지에 캐시 저장하는 함수
+  const saveToCache = (key: string, data: any) => {
+    try {
+      const cacheItem = {
+        data,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`${CACHE_KEY_PREFIX}${key}`, JSON.stringify(cacheItem));
+    } catch (error) {
+      console.error('캐시 저장 오류:', error);
+    }
+  };
+
+  // 로컬 스토리지에서 캐시 가져오는 함수
+  const getFromCache = (key: string) => {
+    try {
+      const cacheItemString = localStorage.getItem(`${CACHE_KEY_PREFIX}${key}`);
+      if (!cacheItemString) return null;
+      
+      const cacheItem = JSON.parse(cacheItemString);
+      const now = Date.now();
+      
+      // 캐시가 만료되었는지 확인
+      if (now - cacheItem.timestamp > CACHE_TIMEOUT) {
+        localStorage.removeItem(`${CACHE_KEY_PREFIX}${key}`);
+        return null;
+      }
+      
+      return cacheItem.data;
+    } catch (error) {
+      console.error('캐시 조회 오류:', error);
+      return null;
+    }
+  };
 
   const fetchFitbitData = useCallback(async (date: string = 'today', force: boolean = false) => {
     if (pendingRequest.current) {
@@ -103,18 +139,48 @@ const FitbitDataCard = () => {
       return;
     }
 
-    if (!force && lastFetchTime[date]) {
-      const now = Date.now();
-      const timeSinceLastFetch = now - lastFetchTime[date];
+    // 캐시 키 생성
+    const cacheKey = `${date}`;
+    
+    // 강제 새로고침이 아닐 경우 캐시 확인
+    if (!force) {
+      // 로컬 스토리지에서 캐시된 데이터 확인
+      const cachedData = getFromCache(cacheKey);
       
-      if (timeSinceLastFetch < CACHE_TIMEOUT) {
-        console.log(`캐시된 데이터 사용 중... 날짜: ${date}, 마지막 요청: ${Math.round(timeSinceLastFetch / 1000)}초 전`);
-        return;
+      if (cachedData) {
+        console.log(`캐시된 데이터 사용 중... 날짜: ${date}`);
+        
+        setFitbitData({
+          profile: cachedData.profile,
+          activity: cachedData.activity,
+          sleep: cachedData.sleep,
+          heart: cachedData.heart,
+          loading: false,
+          error: null,
+          lastUpdated: new Date(cachedData.lastUpdated)
+        });
+        
+        // 캐시된 타임스탬프 확인
+        const now = Date.now();
+        const timeSinceLastFetch = now - (cachedData.timestamp || 0);
+        
+        // 캐시가 5분 내라면 API 호출 건너뛰기
+        if (timeSinceLastFetch < CACHE_TIMEOUT) {
+          console.log(`최근 캐시 사용 중... 마지막 요청: ${Math.round(timeSinceLastFetch / 1000)}초 전`);
+          return cachedData;
+        }
+        
+        // 캐시가 있지만 5분이 지났으면 백그라운드에서 새로운 데이터 가져오기
+        console.log('캐시가 5분 이상 지났습니다. 백그라운드에서 데이터 다시 가져오기...');
+        // 로딩 상태는 true로 설정하지 않음 (백그라운드 갱신이므로 UI에 로딩 표시 안함)
       }
     }
 
     try {
-      setFitbitData(prev => ({ ...prev, loading: true, error: null }));
+      // 강제 새로고침이거나 캐시가 없는 경우에만 로딩 상태 표시
+      if (force || !getFromCache(cacheKey)) {
+        setFitbitData(prev => ({ ...prev, loading: true, error: null }));
+      }
       
       console.log(`Fitbit 데이터 요청 중... 날짜: ${date}`);
       
@@ -140,9 +206,19 @@ const FitbitDataCard = () => {
       const data = await pendingRequest.current;
       console.log('Fitbit 데이터 수신:', Object.keys(data));
       
+      // 로컬 스토리지에 캐시 저장
+      const currentTime = Date.now();
+      const dataToCache = {
+        ...data,
+        timestamp: currentTime,
+        lastUpdated: new Date().toISOString()
+      };
+      
+      saveToCache(cacheKey, dataToCache);
+      
       setLastFetchTime(prev => ({
         ...prev,
-        [date]: Date.now()
+        [date]: currentTime
       }));
       
       setFitbitData({
@@ -183,7 +259,7 @@ const FitbitDataCard = () => {
     } finally {
       pendingRequest.current = null;
     }
-  }, [session, isAutoRefresh, isInitialLoaded, lastFetchTime]);
+  }, [session, isInitialLoaded]);
 
   const handleRefresh = () => {
     fetchFitbitData(selectedDate, true);
