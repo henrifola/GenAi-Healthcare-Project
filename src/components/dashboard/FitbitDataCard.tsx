@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { 
   Box, 
   Card, 
@@ -20,6 +20,7 @@ import {
   StatLabel,
   StatNumber,
   StatHelpText,
+  StatArrow,
   Progress,
   Code,
   IconButton,
@@ -31,11 +32,8 @@ import {
   MenuItem,
   Divider,
   useToast,
-  TabList,
-  Tabs,
-  Tab,
-  TabPanels,
-  TabPanel
+  Grid,
+  GridItem
 } from '@chakra-ui/react';
 import { useSession } from 'next-auth/react';
 import { 
@@ -47,16 +45,24 @@ import {
   FiCalendar, 
   FiTrendingUp, 
   FiDribbble, 
-  FiZap // FiFire 대신 FiZap으로 변경
+  FiZap,
+  FiMoon,
+  FiZoomIn
 } from 'react-icons/fi';
 import { format, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
+
+interface TrendData {
+  value: number;
+  trend?: number;
+}
 
 interface FitbitData {
   profile?: any;
   activity?: any;
   sleep?: any;
   heart?: any;
+  hrv?: TrendData;
   loading: boolean;
   error: string | null;
   lastUpdated?: Date;
@@ -72,15 +78,30 @@ const FitbitDataCard = () => {
   const [debug, setDebug] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>('today');
   const [isAutoRefresh, setIsAutoRefresh] = useState(false);
-  const [autoRefreshInterval, setAutoRefreshInterval] = useState(5 * 60 * 1000); // 5분으로 기본 설정
-  const [activeTab, setActiveTab] = useState(0);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState(5 * 60 * 1000);
   const [isInitialLoaded, setIsInitialLoaded] = useState(false);
   const [lastFetchTime, setLastFetchTime] = useState<Record<string, number>>({});
+  const [mockTrendData, setMockTrendData] = useState({
+    heartRate: { value: 72, trend: -2 },
+    steps: { value: 8456, trend: 12 },
+    sleep: { value: 7.5, trend: 5 },
+    calories: { value: 450, trend: -3 },
+    activeMinutes: { value: 45, trend: 5 },
+    hrv: { value: 45, trend: 5 },
+    sleepQuality: { value: 75, trend: 0 }
+  });
+  
+  const initialFetchDone = useRef(false);
+  const pendingRequest = useRef<Promise<any> | null>(null);
 
-  // 캐시 제한 시간 (5분)
   const CACHE_TIMEOUT = 5 * 60 * 1000;
 
   const fetchFitbitData = useCallback(async (date: string = 'today', force: boolean = false) => {
+    if (pendingRequest.current) {
+      console.log('이미 진행 중인 요청이 있습니다. 기존 요청을 재사용합니다.');
+      return pendingRequest.current;
+    }
+    
     setDebug(JSON.stringify({
       hasSession: !!session,
       provider: session?.provider,
@@ -95,12 +116,10 @@ const FitbitDataCard = () => {
       return;
     }
 
-    // 캐시 체크 (강제 요청이 아닌 경우)
     if (!force && lastFetchTime[date]) {
       const now = Date.now();
       const timeSinceLastFetch = now - lastFetchTime[date];
       
-      // 캐시 유효 시간 내라면 API 요청 스킵
       if (timeSinceLastFetch < CACHE_TIMEOUT) {
         console.log(`캐시된 데이터 사용 중... 날짜: ${date}, 마지막 요청: ${Math.round(timeSinceLastFetch / 1000)}초 전`);
         return;
@@ -111,34 +130,34 @@ const FitbitDataCard = () => {
       setFitbitData(prev => ({ ...prev, loading: true, error: null }));
       
       console.log(`Fitbit 데이터 요청 중... 날짜: ${date}`);
-      const response = await fetch(`/api/fitbit/user-data?date=${date}&type=all`);
       
-      // API 요청 한도 초과 오류 특별 처리
-      if (response.status === 429) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Fitbit API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
-      }
+      pendingRequest.current = fetch(`/api/fitbit/user-data?date=${date}&type=all`).then(async (response) => {
+        if (response.status === 429) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Fitbit API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        }
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('API 응답 오류:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(errorData.message || `Fitbit 데이터를 가져오는데 실패했습니다: ${response.status} ${response.statusText}`);
+        }
+        
+        return response.json();
+      });
       
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('API 응답 오류:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        throw new Error(errorData.message || `Fitbit 데이터를 가져오는데 실패했습니다: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
+      const data = await pendingRequest.current;
       console.log('Fitbit 데이터 수신:', Object.keys(data));
       
-      // 캐시 시간 업데이트
       setLastFetchTime(prev => ({
         ...prev,
         [date]: Date.now()
       }));
       
-      // 일부 데이터만 받아와도 표시 (가능한 정보만이라도 보여주기)
       setFitbitData({
         profile: data.profile,
         activity: data.activity,
@@ -157,7 +176,6 @@ const FitbitDataCard = () => {
     } catch (error: any) {
       console.error('Fitbit 데이터 요청 오류:', error);
       
-      // 요청 한도 초과 오류인 경우 특별 처리
       const isRateLimitError = error.message && (
         error.message.includes('429') || 
         error.message.includes('Too Many Requests') || 
@@ -168,7 +186,6 @@ const FitbitDataCard = () => {
         ...prev,
         loading: false,
         error: error.message || '데이터를 불러오는데 문제가 발생했습니다',
-        // 429 오류가 발생해도 기존 데이터는 유지
         profile: isRateLimitError ? prev.profile : prev.profile,
         activity: isRateLimitError ? prev.activity : prev.activity,
         sleep: isRateLimitError ? prev.sleep : prev.sleep,
@@ -184,13 +201,14 @@ const FitbitDataCard = () => {
           isClosable: true,
         });
         
-        // 요청 한도 초과 시 자동 새로고침 일시 중지
         if (isRateLimitError) {
           setIsAutoRefresh(false);
         }
       }
       
       return null;
+    } finally {
+      pendingRequest.current = null;
     }
   }, [session, toast, isAutoRefresh, isInitialLoaded, lastFetchTime]);
 
@@ -215,10 +233,6 @@ const FitbitDataCard = () => {
     fetchFitbitData(dateString);
   };
 
-  const handleTabChange = (index: number) => {
-    setActiveTab(index);
-  };
-
   const toggleAutoRefresh = () => {
     setIsAutoRefresh(prev => !prev);
   };
@@ -239,9 +253,19 @@ const FitbitDataCard = () => {
   }, [isAutoRefresh, session, selectedDate, fetchFitbitData, autoRefreshInterval]);
 
   useEffect(() => {
-    if (session?.accessToken) {
-      fetchFitbitData(selectedDate);
+    // 세션이 없거나 초기 데이터 로딩이 이미 완료된 경우 중복 요청 방지
+    if (!session?.accessToken || initialFetchDone.current) {
+      return;
     }
+    
+    console.log('초기 Fitbit 데이터 로드 시작 - 한 번만 실행');
+    initialFetchDone.current = true;
+    fetchFitbitData(selectedDate);
+    
+    // 컴포넌트가 언마운트될 때 초기화
+    return () => {
+      initialFetchDone.current = false;
+    };
   }, [session, selectedDate, fetchFitbitData]);
 
   const renderDebugInfo = () => {
@@ -307,6 +331,177 @@ const FitbitDataCard = () => {
     );
   };
 
+  const renderTrendIndicator = (trend: number | undefined) => {
+    if (trend === undefined || trend === 0) return null;
+    
+    return (
+      <Stat>
+        <StatHelpText m={0}>
+          <StatArrow type={trend > 0 ? 'increase' : 'decrease'} />
+          {Math.abs(trend)}%
+        </StatHelpText>
+      </Stat>
+    );
+  };
+
+  const renderDashboard = () => {
+    const activityData = fitbitData.activity?.summary;
+    const sleepData = fitbitData.sleep?.summary;
+    const heartData = fitbitData.heart?.['activities-heart']?.[0]?.value;
+
+    if (!activityData && !sleepData && !heartData) {
+      return (
+        <Alert status="warning">
+          <AlertIcon />
+          건강 데이터를 불러올 수 없습니다. 새로고침을 시도해보세요.
+        </Alert>
+      );
+    }
+
+    return (
+      <Stack spacing={6}>
+        <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} spacing={4}>
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiHeart color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.heartRate.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>Heart Rate</Text>
+              <Flex align="baseline">
+                <Text fontSize="3xl" fontWeight="bold">{heartData?.restingHeartRate || mockTrendData.heartRate.value}</Text>
+                <Text ml={1} fontSize="md" color="gray.500">bpm</Text>
+              </Flex>
+            </CardBody>
+          </Card>
+
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiActivity color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.steps.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>Steps</Text>
+              <Text fontSize="3xl" fontWeight="bold">
+                {activityData?.steps?.toLocaleString() || mockTrendData.steps.value.toLocaleString()}
+              </Text>
+            </CardBody>
+          </Card>
+
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiMoon color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.sleep.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>Sleep</Text>
+              <Flex align="baseline">
+                <Text fontSize="3xl" fontWeight="bold">
+                  {sleepData ? (Math.floor(sleepData.totalTimeInBed / 60) + (sleepData.totalTimeInBed % 60) / 100).toFixed(1) : mockTrendData.sleep.value}
+                </Text>
+                <Text ml={1} fontSize="md" color="gray.500">hrs</Text>
+              </Flex>
+            </CardBody>
+          </Card>
+
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiZap color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.calories.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>Calories</Text>
+              <Flex align="baseline">
+                <Text fontSize="3xl" fontWeight="bold">
+                  {activityData?.caloriesOut || mockTrendData.calories.value}
+                </Text>
+                <Text ml={1} fontSize="md" color="gray.500">kcal</Text>
+              </Flex>
+            </CardBody>
+          </Card>
+        </SimpleGrid>
+
+        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiClock color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.activeMinutes.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>Active Minutes</Text>
+              <Flex align="baseline">
+                <Text fontSize="3xl" fontWeight="bold">
+                  {activityData ? (activityData.fairlyActiveMinutes || 0) + (activityData.veryActiveMinutes || 0) : mockTrendData.activeMinutes.value}
+                </Text>
+                <Text ml={1} fontSize="md" color="gray.500">min</Text>
+              </Flex>
+            </CardBody>
+          </Card>
+
+          <Card bg="white" boxShadow="md" borderRadius="lg">
+            <CardBody p={4}>
+              <Flex align="center" justify="space-between" mb={1}>
+                <Box bg="blue.50" p={2} borderRadius="md">
+                  <FiZoomIn color="#3182CE" />
+                </Box>
+                {renderTrendIndicator(mockTrendData.hrv.trend)}
+              </Flex>
+              <Text fontSize="sm" color="gray.500" mt={2}>HRV</Text>
+              <Flex align="baseline">
+                <Text fontSize="3xl" fontWeight="bold">{mockTrendData.hrv.value}</Text>
+                <Text ml={1} fontSize="md" color="gray.500">ms</Text>
+              </Flex>
+            </CardBody>
+          </Card>
+        </SimpleGrid>
+
+        <Card bg="white" boxShadow="md" borderRadius="lg">
+          <CardBody p={4}>
+            <Flex justify="space-between" mb={2}>
+              <Box>
+                <Flex align="center">
+                  <Box bg="blue.50" p={2} borderRadius="md" mr={2}>
+                    <FiMoon color="#3182CE" />
+                  </Box>
+                  <Text fontWeight="medium">Sleep Quality</Text>
+                </Flex>
+              </Box>
+              <Text fontWeight="bold" color="blue.500">Last Night</Text>
+            </Flex>
+            
+            <Progress 
+              value={sleepData?.efficiency || mockTrendData.sleepQuality.value} 
+              colorScheme="blue" 
+              size="lg" 
+              borderRadius="full" 
+              my={3} 
+            />
+            
+            <Flex justify="space-between">
+              <Text fontSize="sm" color="gray.500">Hours Slept</Text>
+              <Text fontWeight="bold">
+                {sleepData ? `${Math.floor(sleepData.totalTimeInBed / 60)}.${sleepData.totalTimeInBed % 60} hrs` : `${mockTrendData.sleep.value} hrs`}
+              </Text>
+            </Flex>
+            <Text fontSize="sm" fontWeight="bold" textAlign="right" mt={1}>
+              {sleepData?.efficiency || mockTrendData.sleepQuality.value}%
+            </Text>
+          </CardBody>
+        </Card>
+      </Stack>
+    );
+  };
+
   if (!session?.accessToken) {
     return (
       <Card>
@@ -358,10 +553,6 @@ const FitbitDataCard = () => {
     );
   }
 
-  const activityData = fitbitData.activity?.summary;
-  const sleepData = fitbitData.sleep?.summary;
-  const heartData = fitbitData.heart?.['activities-heart']?.[0]?.value;
-
   return (
     <Card>
       <CardHeader>
@@ -391,188 +582,7 @@ const FitbitDataCard = () => {
             </Box>
           )}
 
-          <Tabs isFitted variant="enclosed" onChange={handleTabChange} index={activeTab}>
-            <TabList mb="1em">
-              <Tab>활동 요약</Tab>
-              <Tab>수면</Tab>
-              <Tab>심박수</Tab>
-            </TabList>
-            <TabPanels>
-              <TabPanel p={0} pt={4}>
-                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
-                  {activityData ? (
-                    <>
-                      <Stat>
-                        <StatLabel display="flex" alignItems="center">
-                          <FiActivity style={{ marginRight: '8px' }} /> 걸음 수
-                        </StatLabel>
-                        <StatNumber>{activityData.steps?.toLocaleString() || '0'}</StatNumber>
-                        <StatHelpText>목표: 10,000 걸음</StatHelpText>
-                        <Progress 
-                          value={((activityData.steps || 0) / 10000) * 100} 
-                          colorScheme="blue" 
-                          size="sm"
-                        />
-                      </Stat>
-                      
-                      <Stat>
-                        <StatLabel display="flex" alignItems="center">
-                          <FiTrendingUp style={{ marginRight: '8px' }} /> 이동 거리
-                        </StatLabel>
-                        <StatNumber>{(activityData.distances?.[0]?.distance || 0).toFixed(2)}</StatNumber>
-                        <StatHelpText>킬로미터</StatHelpText>
-                      </Stat>
-                      
-                      <Stat>
-                        <StatLabel display="flex" alignItems="center">
-                          <FiZap style={{ marginRight: '8px' }} /> 칼로리
-                        </StatLabel>
-                        <StatNumber>{(activityData.caloriesOut || 0).toLocaleString()}</StatNumber>
-                        <StatHelpText>소모 칼로리</StatHelpText>
-                      </Stat>
-                      
-                      <Stat>
-                        <StatLabel display="flex" alignItems="center">
-                          <FiDribbble style={{ marginRight: '8px' }} /> 활동 시간
-                        </StatLabel>
-                        <StatNumber>
-                          {((activityData.fairlyActiveMinutes || 0) + (activityData.veryActiveMinutes || 0))}
-                        </StatNumber>
-                        <StatHelpText>분</StatHelpText>
-                        <HStack spacing={2} mt={1}>
-                          <Badge colorScheme="green">매우 활발: {activityData.veryActiveMinutes || 0}분</Badge>
-                          <Badge colorScheme="blue">활발: {activityData.fairlyActiveMinutes || 0}분</Badge>
-                        </HStack>
-                      </Stat>
-                    </>
-                  ) : (
-                    <Box gridColumn={{ base: "span 1", md: "span 3" }}>
-                      <Alert status="warning">
-                        <AlertIcon />
-                        활동 데이터를 불러올 수 없습니다.
-                      </Alert>
-                    </Box>
-                  )}
-                </SimpleGrid>
-              </TabPanel>
-              
-              <TabPanel p={0} pt={4}>
-                {sleepData ? (
-                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                    <Stat>
-                      <StatLabel display="flex" alignItems="center">
-                        <FiClock style={{ marginRight: '8px' }} /> 수면 시간
-                      </StatLabel>
-                      <StatNumber>
-                        {Math.floor((sleepData.totalTimeInBed || 0) / 60)}시간 
-                        {(sleepData.totalTimeInBed || 0) % 60}분
-                      </StatNumber>
-                      <StatHelpText>침대에서 보낸 총 시간</StatHelpText>
-                      <Progress 
-                        value={(sleepData.totalTimeInBed / 480) * 100}
-                        colorScheme="purple" 
-                        size="sm"
-                      />
-                    </Stat>
-                    
-                    <Stat>
-                      <StatLabel display="flex" alignItems="center">
-                        <FiActivity style={{ marginRight: '8px' }} /> 수면 효율
-                      </StatLabel>
-                      <StatNumber>{sleepData.efficiency || 0}%</StatNumber>
-                      <StatHelpText>실제 수면 시간 / 침대에서 보낸 시간</StatHelpText>
-                      <Progress 
-                        value={sleepData.efficiency || 0} 
-                        colorScheme={sleepData.efficiency > 85 ? "green" : sleepData.efficiency > 70 ? "blue" : "orange"} 
-                        size="sm"
-                      />
-                    </Stat>
-                    
-                    {sleepData.stages && (
-                      <Box gridColumn={{ md: "span 2" }}>
-                        <Text fontWeight="bold" mb={2}>수면 단계</Text>
-                        <SimpleGrid columns={{ base: 2, md: 4 }} spacing={4}>
-                          <Stat>
-                            <StatLabel>깊은 수면</StatLabel>
-                            <StatNumber>{Math.floor((sleepData.stages.deep || 0) / 60)}시간 {(sleepData.stages.deep || 0) % 60}분</StatNumber>
-                            <Progress value={(sleepData.stages.deep / sleepData.totalMinutesAsleep) * 100} colorScheme="blue" size="sm" />
-                          </Stat>
-                          <Stat>
-                            <StatLabel>얕은 수면</StatLabel>
-                            <StatNumber>{Math.floor((sleepData.stages.light || 0) / 60)}시간 {(sleepData.stages.light || 0) % 60}분</StatNumber>
-                            <Progress value={(sleepData.stages.light / sleepData.totalMinutesAsleep) * 100} colorScheme="cyan" size="sm" />
-                          </Stat>
-                          <Stat>
-                            <StatLabel>렘 수면</StatLabel>
-                            <StatNumber>{Math.floor((sleepData.stages.rem || 0) / 60)}시간 {(sleepData.stages.rem || 0) % 60}분</StatNumber>
-                            <Progress value={(sleepData.stages.rem / sleepData.totalMinutesAsleep) * 100} colorScheme="purple" size="sm" />
-                          </Stat>
-                          <Stat>
-                            <StatLabel>깨어 있음</StatLabel>
-                            <StatNumber>{Math.floor((sleepData.stages.wake || 0) / 60)}시간 {(sleepData.stages.wake || 0) % 60}분</StatNumber>
-                            <Progress value={(sleepData.stages.wake / sleepData.totalMinutesAsleep) * 100} colorScheme="gray" size="sm" />
-                          </Stat>
-                        </SimpleGrid>
-                      </Box>
-                    )}
-                  </SimpleGrid>
-                ) : (
-                  <Alert status="warning">
-                    <AlertIcon />
-                    수면 데이터를 불러올 수 없습니다.
-                  </Alert>
-                )}
-              </TabPanel>
-              
-              <TabPanel p={0} pt={4}>
-                {heartData ? (
-                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                    <Stat>
-                      <StatLabel display="flex" alignItems="center">
-                        <FiHeart style={{ marginRight: '8px' }} /> 안정 시 심박수
-                      </StatLabel>
-                      <StatNumber>{heartData.restingHeartRate || '-'}</StatNumber>
-                      <StatHelpText>bpm</StatHelpText>
-                      <Box mt={2}>
-                        {heartData.restingHeartRate > 100 ? (
-                          <Badge colorScheme="orange" display="flex" alignItems="center">
-                            <FiAlertCircle style={{ marginRight: '4px' }} /> 높음
-                          </Badge>
-                        ) : heartData.restingHeartRate < 60 ? (
-                          <Badge colorScheme="green">낮음</Badge>
-                        ) : (
-                          <Badge colorScheme="blue">정상</Badge>
-                        )}
-                      </Box>
-                    </Stat>
-                    
-                    {heartData.heartRateZones && (
-                      <Box gridColumn={{ md: "span 2" }}>
-                        <Text fontWeight="bold" mb={2}>심박수 구간</Text>
-                        <SimpleGrid columns={{ base: 1, md: 4 }} spacing={4}>
-                          {heartData.heartRateZones.map((zone: any, index: number) => (
-                            <Stat key={index}>
-                              <StatLabel>{zone.name}</StatLabel>
-                              <StatNumber>{zone.minutes || 0}</StatNumber>
-                              <StatHelpText>분</StatHelpText>
-                              <Text fontSize="xs">
-                                {zone.min || 0} - {zone.max || '--'} bpm
-                              </Text>
-                            </Stat>
-                          ))}
-                        </SimpleGrid>
-                      </Box>
-                    )}
-                  </SimpleGrid>
-                ) : (
-                  <Alert status="warning">
-                    <AlertIcon />
-                    심박수 데이터를 불러올 수 없습니다.
-                  </Alert>
-                )}
-              </TabPanel>
-            </TabPanels>
-          </Tabs>
+          {renderDashboard()}
           
           {fitbitData.loading && (
             <Flex justify="center">

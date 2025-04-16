@@ -8,8 +8,50 @@ const FITBIT_API_URL = 'https://api.fitbit.com/1';
 // API 요청에 대한 지연 시간을 추가하는 함수
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// 간단한 인메모리 캐시 구현
+interface CacheItem {
+  data: any;
+  timestamp: number;
+}
+
+const cache: Record<string, CacheItem> = {};
+const CACHE_TTL = 5 * 60 * 1000; // 캐시 유효시간: 5분
+
+// 캐시에서 데이터 가져오기
+function getCachedData(cacheKey: string): any | null {
+  const cachedItem = cache[cacheKey];
+  if (!cachedItem) return null;
+  
+  const now = Date.now();
+  if (now - cachedItem.timestamp > CACHE_TTL) {
+    // 캐시 만료
+    delete cache[cacheKey];
+    return null;
+  }
+  
+  return cachedItem.data;
+}
+
+// 캐시에 데이터 저장
+function setCacheData(cacheKey: string, data: any): void {
+  cache[cacheKey] = {
+    data,
+    timestamp: Date.now()
+  };
+}
+
 // 서버 측에서 Fitbit API 호출하는 함수
 async function fetchFitbitDataFromServer(url: string, accessToken: string, retryCount = 0, maxRetries = 3) {
+  // 캐시 키 생성
+  const cacheKey = `${url}_${accessToken.substring(0, 10)}`;
+  
+  // 캐시 확인
+  const cachedData = getCachedData(cacheKey);
+  if (cachedData) {
+    console.log(`캐시에서 데이터 반환: ${url}`);
+    return cachedData;
+  }
+  
   try {
     // 재시도 시 지연 시간 추가 (지수 백오프)
     if (retryCount > 0) {
@@ -97,7 +139,12 @@ async function fetchFitbitDataFromServer(url: string, accessToken: string, retry
 
     // JSON 파싱 시도
     try {
-      return JSON.parse(responseText);
+      const data = JSON.parse(responseText);
+      
+      // 성공한 응답 캐시에 저장
+      setCacheData(cacheKey, data);
+      
+      return data;
     } catch (error) {
       console.error('JSON 파싱 오류:', error, '원본 텍스트:', responseText.substring(0, 100));
       throw new Error('응답을 JSON으로 파싱할 수 없습니다.');
@@ -107,6 +154,9 @@ async function fetchFitbitDataFromServer(url: string, accessToken: string, retry
     throw error;
   }
 }
+
+// 진행 중인 요청 추적을 위한 객체
+const pendingRequests: Record<string, Promise<any>> = {};
 
 export async function GET(request: NextRequest) {
   try {
@@ -118,7 +168,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
     }
     
-    // 세션 정보 확인 (보안을 위해 토큰은 일부만 표시)
+    // 세션 정보 확인
     console.log('세션 정보:', {
       hasSession: !!session,
       provider: session.provider,
@@ -139,7 +189,7 @@ export async function GET(request: NextRequest) {
     
     // 요청 파라미터 가져오기
     const searchParams = request.nextUrl.searchParams;
-    const dataType = searchParams.get('type') || 'all'; // 기본값을 'all'로 변경
+    const dataType = searchParams.get('type') || 'all';
     let date = searchParams.get('date') || 'today';
     
     // 'today'인 경우 실제 오늘 날짜로 변환 (YYYY-MM-DD 형식)
@@ -149,139 +199,135 @@ export async function GET(request: NextRequest) {
       console.log(`'today'를 실제 날짜로 변환: ${date}`);
     }
     
+    // 요청 키 생성 (중복 요청 방지)
+    const requestKey = `${dataType}_${date}_${session.accessToken.substring(0, 10)}`;
+    
+    // 이미 진행 중인 동일한 요청이 있는지 확인
+    if (pendingRequests[requestKey]) {
+      console.log('이미 진행 중인 동일한 요청이 있습니다. 해당 요청 결과를 기다립니다.');
+      try {
+        // 기존 요청의 결과를 기다림
+        const data = await pendingRequests[requestKey];
+        return NextResponse.json(data);
+      } catch (error: any) {
+        console.error('기존 요청에서 오류 발생:', error);
+        return NextResponse.json(
+          { error: '데이터 가져오기 실패', message: error.message },
+          { status: 500 }
+        );
+      }
+    }
+    
     let data = {};
     const accessToken = session.accessToken;
     
-    // 개별 데이터 요청으로 변경
-    console.log(`데이터 타입: ${dataType}, 날짜: ${date} 요청`);
+    // 각 데이터 타입에 따라 요청 처리 (Promise 생성)
+    const fetchDataPromise = (async () => {
+      try {
+        switch (dataType) {
+          case 'profile':
+            data = await fetchFitbitDataFromServer('/user/-/profile.json', accessToken);
+            break;
+            
+          case 'activity':
+            const activityData = await fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken);
+            console.log('활동 데이터 구조:', JSON.stringify(activityData).substring(0, 300) + '...');
+            data = activityData;
+            break;
+            
+          case 'sleep':
+            data = await fetchFitbitDataFromServer(`/user/-/sleep/date/${date}.json`, accessToken);
+            break;
+            
+          case 'heart':
+            data = await fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken);
+            break;
+            
+          case 'all':
+            // Promise.all을 사용하여 여러 요청을 병렬로 처리
+            try {
+              const [profile, activity, sleep, heart] = await Promise.all([
+                fetchFitbitDataFromServer('/user/-/profile.json', accessToken),
+                fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken).catch(e => {
+                  console.log(`활동 데이터 가져오기 실패: ${e.message}, 계속 진행`);
+                  return null;
+                }),
+                fetchFitbitDataFromServer(`/user/-/sleep/date/${date}.json`, accessToken).catch(e => {
+                  console.log(`수면 데이터 가져오기 실패: ${e.message}, 계속 진행`);
+                  return null;
+                }),
+                fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken).catch(e => {
+                  console.log(`심박수 데이터 가져오기 실패: ${e.message}, 계속 진행`);
+                  return null;
+                })
+              ]);
+              
+              data = {
+                ...(profile ? { profile } : {}),
+                ...(activity ? { activity } : {}),
+                ...(sleep ? { sleep } : {}),
+                ...(heart ? { heart } : {}),
+              };
+              
+              if (Object.keys(data).length === 0) {
+                throw new Error('모든 데이터를 가져오는데 실패했습니다.');
+              }
+            } catch (e) {
+              console.error('모든 데이터 가져오기 실패, 가능한 데이터 반환:', e);
+              if (Object.keys(data).length === 0) {
+                throw e; // 아무 데이터도 없으면 오류 발생
+              }
+            }
+            break;
+            
+          default:
+            throw new Error('유효하지 않은 데이터 타입입니다.');
+        }
+        
+        console.log('데이터 가져오기 성공:', Object.keys(data));
+        return data;
+      } catch (error: any) {
+        console.error(`${dataType} 데이터 요청 실패:`, error);
+        
+        let status = 500;
+        let message = error.message || '데이터를 가져오는데 실패했습니다';
+        
+        if (message.includes('429') || message.includes('Too Many Requests')) {
+          status = 429;
+          message = 'Fitbit API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
+        }
+        
+        throw { status, message };
+      }
+    })();
+    
+    // 진행 중인 요청 저장
+    pendingRequests[requestKey] = fetchDataPromise;
     
     try {
-      // 오류 식별을 위해 하나의 요청만 처리
-      switch (dataType) {
-        case 'profile':
-          // 프로필 정보만 요청
-          data = await fetchFitbitDataFromServer('/user/-/profile.json', accessToken);
-          break;
-          
-        case 'activity':
-          const activityData = await fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken);
-          console.log('활동 데이터 구조:', JSON.stringify(activityData).substring(0, 300) + '...');
-          
-          // 필수 필드 확인
-          if (!activityData || !activityData.summary) {
-            console.warn('활동 데이터에 summary 필드가 없습니다:', activityData);
-          } else {
-            // 필요한 필드가 있는지 확인
-            const requiredFields = ['steps', 'caloriesOut', 'fairlyActiveMinutes', 'veryActiveMinutes'];
-            const missingFields = requiredFields.filter(field => activityData.summary[field] === undefined);
-            
-            if (missingFields.length > 0) {
-              console.warn(`활동 데이터에 일부 필드가 누락되었습니다: ${missingFields.join(', ')}`);
-            }
-          }
-          
-          data = activityData;
-          break;
-          
-        case 'sleep':
-          data = await fetchFitbitDataFromServer(`/user/-/sleep/date/${date}.json`, accessToken);
-          break;
-          
-        case 'heart':
-          data = await fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken);
-          break;
-          
-        case 'all':
-          // 여러 요청으로 나누고 각각 충분한 지연 시간 추가
-          try {
-            // 먼저 프로필 정보 요청
-            const profile = await fetchFitbitDataFromServer('/user/-/profile.json', accessToken);
-            data = { profile };
-            
-            // 프로필 요청 후 1초 지연
-            await delay(1000);
-            
-            try {
-              // 활동 데이터 요청
-              const activity = await fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken);
-              console.log('활동 데이터 구조:', JSON.stringify(activity).substring(0, 300) + '...');
-              
-              // 필수 필드 확인
-              if (!activity || !activity.summary) {
-                console.warn('활동 데이터에 summary 필드가 없습니다:', activity);
-              } else {
-                // 필요한 필드가 있는지 확인
-                const requiredFields = ['steps', 'caloriesOut', 'fairlyActiveMinutes', 'veryActiveMinutes'];
-                const missingFields = requiredFields.filter(field => activity.summary[field] === undefined);
-                
-                if (missingFields.length > 0) {
-                  console.warn(`활동 데이터에 일부 필드가 누락되었습니다: ${missingFields.join(', ')}`);
-                }
-              }
-              
-              data = { ...data, activity };
-              await delay(1000); // 다음 요청 전 1초 지연
-            } catch (e: any) {
-              console.log(`활동 데이터 가져오기 실패: ${e.message}, 계속 진행`);
-            }
-            
-            try {
-              // 수면 데이터 요청
-              const sleep = await fetchFitbitDataFromServer(`/user/-/sleep/date/${date}.json`, accessToken);
-              data = { ...data, sleep };
-              await delay(1000); // 다음 요청 전 1초 지연
-            } catch (e: any) {
-              console.log(`수면 데이터 가져오기 실패: ${e.message}, 계속 진행`);
-            }
-            
-            try {
-              // 심박수 데이터 요청
-              const heart = await fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken);
-              data = { ...data, heart };
-            } catch (e: any) {
-              console.log(`심박수 데이터 가져오기 실패: ${e.message}, 계속 진행`);
-            }
-            
-          } catch (e) {
-            console.error('모든 데이터 가져오기 실패, 가능한 데이터 반환:', e);
-            // 부분적으로라도 성공한 데이터가 있으면 반환
-            if (Object.keys(data).length === 0) {
-              throw e; // 아무 데이터도 없으면 오류 발생
-            }
-          }
-          break;
-          
-        default:
-          return NextResponse.json({ error: '유효하지 않은 데이터 타입입니다.' }, { status: 400 });
-      }
-      
-      console.log('데이터 가져오기 성공:', Object.keys(data));
-      return NextResponse.json(data);
-      
+      // 요청 결과 기다림
+      const result = await fetchDataPromise;
+      return NextResponse.json(result);
     } catch (error: any) {
-      console.error(`${dataType} 데이터 요청 실패:`, error);
-      
-      // 429 오류인 경우 사용자 친화적인 메시지 반환
-      let status = 500;
-      let message = error.message || '데이터를 가져오는데 실패했습니다';
-      
-      if (message.includes('429') || message.includes('Too Many Requests')) {
-        status = 429;
-        message = 'Fitbit API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
-      }
-      
-      // 오류 응답 개선
-      return NextResponse.json({
-        error: '데이터 가져오기 실패', 
-        message: message,
-        dataType: dataType,
-        // 디버깅용 정보 추가
-        debug: {
-          provider: session.provider,
-          hasToken: !!session.accessToken,
-          tokenLength: session.accessToken?.length
-        }
-      }, { status });
+      // 오류 응답 반환
+      return NextResponse.json(
+        {
+          error: '데이터 가져오기 실패', 
+          message: error.message,
+          dataType: dataType,
+          debug: {
+            provider: session.provider,
+            hasToken: !!session.accessToken,
+            tokenLength: session.accessToken?.length
+          }
+        }, 
+        { status: error.status || 500 }
+      );
+    } finally {
+      // 요청 처리 완료 후 참조 제거
+      setTimeout(() => {
+        delete pendingRequests[requestKey];
+      }, 1000);
     }
     
   } catch (error: any) {
