@@ -3,7 +3,18 @@
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Button, Input, VStack, Heading, Box } from '@chakra-ui/react';
+import { 
+  Button, 
+  Input, 
+  VStack, 
+  Heading, 
+  Box, 
+  Divider, 
+  Text,
+  HStack
+} from '@chakra-ui/react';
+import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
+import FitbitLoginButton from '@/components/auth/FitbitLoginButton';
 
 export default function LoginPage() {
   const { data: session } = useSession();
@@ -37,6 +48,22 @@ export default function LoginPage() {
     >
       <VStack gap={4} width="100%" maxW="400px">
         <Heading>Login</Heading>
+        
+        {/* OAuth 로그인 버튼 */}
+        <VStack width="100%" spacing={4}>
+          <GoogleLoginButton />
+          <FitbitLoginButton />
+        </VStack>
+        
+        <HStack width="100%" my={4}>
+          <Divider />
+          <Text fontSize="sm" color="gray.500" whiteSpace="nowrap" px={2}>
+            OR
+          </Text>
+          <Divider />
+        </HStack>
+        
+        {/* 기존 이메일/비밀번호 로그인 폼 */}
         <form onSubmit={handleSubmit} style={{ width: '100%' }}>
           <VStack gap={4} width="100%">
             <Input

@@ -25,6 +25,7 @@ import {
 import { MetricCard } from '@/components/dashboard/MetricCard';
 import { SleepQualityCard } from '@/components/dashboard/SleepQualityCard';
 import { DailyHealthAdvice } from '@/components/dashboard/DailyHealthAdvice';
+import FitbitDataCard from '@/components/dashboard/FitbitDataCard';
 import { HealthMetrics } from '@/types/dashboard';
 
 // Dummy user data
@@ -91,7 +92,7 @@ export default function DashboardPage() {
               size="lg"
               boxShadow="md"
             />
-            <Heading>Welcome back, {dummyUser.name}</Heading>
+            <Heading>Welcome back, {session.user?.name || dummyUser.name}</Heading>
           </HStack>
           <Button
             leftIcon={<FiLogOut />}
@@ -103,6 +104,9 @@ export default function DashboardPage() {
             Log Out
           </Button>
         </Flex>
+
+        {/* Fitbit Data Card */}
+        <FitbitDataCard />
 
         {/* Health Insights */}
         <DailyHealthAdvice healthData={healthData} />

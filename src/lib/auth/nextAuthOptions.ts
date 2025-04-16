@@ -6,6 +6,17 @@ import GoogleProvider from 'next-auth/providers/google';
 declare module 'next-auth' {
   interface Session {
     accessToken?: string;
+    refreshToken?: string;
+    provider?: string;
+  }
+}
+
+declare module 'next-auth/jwt' {
+  interface JWT {
+    accessToken?: string;
+    refreshToken?: string;
+    provider?: string;
+    expiresAt?: number;
   }
 }
 
@@ -15,24 +26,52 @@ export const nextAuthOptions: NextAuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID || '',
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
     }),
+    // Fitbit OAuth Provider 구현
+    {
+      id: "fitbit",
+      name: "Fitbit",
+      type: "oauth",
+      authorization: {
+        url: "https://www.fitbit.com/oauth2/authorize",
+        params: { 
+          scope: "activity heartrate location nutrition profile settings sleep weight",
+          response_type: "code" 
+        }
+      },
+      token: "https://api.fitbit.com/oauth2/token",
+      userinfo: "https://api.fitbit.com/1/user/-/profile.json",
+      profile: (profile: any) => {
+        return {
+          id: profile.user.encodedId,
+          name: `${profile.user.firstName} ${profile.user.lastName}`,
+          email: profile.user.email || `${profile.user.encodedId}@fitbit.user`,
+          image: profile.user.avatar150 || profile.user.avatar,
+        }
+      },
+      clientId: process.env.FITBIT_CLIENT_ID || '',
+      clientSecret: process.env.FITBIT_CLIENT_SECRET || '',
+    },
   ],
-  // Optional: Add callbacks, pages, etc. as needed
   callbacks: {
     async jwt({ token, account }) {
-      // If user just signed in, persist accessToken, etc.
+      // 액세스 토큰과 리프레시 토큰 저장
       if (account) {
         token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.provider = account.provider;
+        token.expiresAt = account.expires_at;
       }
       return token;
     },
     async session({ session, token }: { session: Session; token: JWT }) {
-      // Attach token to session
-      session.accessToken = token.accessToken as string;
+      // 세션에 액세스 토큰 추가
+      session.accessToken = token.accessToken;
+      session.refreshToken = token.refreshToken;
+      session.provider = token.provider;
       return session;
     },
   },
-  // Add custom pages if needed, e.g.:
-  // pages: {
-  //   signIn: '/login'
-  // },
+  pages: {
+    signIn: '/login'
+  },
 };
