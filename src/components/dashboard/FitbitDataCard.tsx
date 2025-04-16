@@ -22,7 +22,6 @@ import {
   StatHelpText,
   StatArrow,
   Progress,
-  Code,
   IconButton,
   Tooltip,
   HStack,
@@ -30,10 +29,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
-  Divider,
-  useToast,
-  Grid,
-  GridItem
+  VStack
 } from '@chakra-ui/react';
 import { useSession } from 'next-auth/react';
 import { 
@@ -44,10 +40,9 @@ import {
   FiRefreshCw, 
   FiCalendar, 
   FiTrendingUp, 
-  FiDribbble, 
   FiZap,
   FiMoon,
-  FiZoomIn
+  FiCheckCircle
 } from 'react-icons/fi';
 import { format, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
@@ -70,12 +65,10 @@ interface FitbitData {
 
 const FitbitDataCard = () => {
   const { data: session } = useSession();
-  const toast = useToast();
   const [fitbitData, setFitbitData] = useState<FitbitData>({
     loading: false,
     error: null
   });
-  const [debug, setDebug] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<string>('today');
   const [isAutoRefresh, setIsAutoRefresh] = useState(false);
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(5 * 60 * 1000);
@@ -101,12 +94,6 @@ const FitbitDataCard = () => {
       console.log('이미 진행 중인 요청이 있습니다. 기존 요청을 재사용합니다.');
       return pendingRequest.current;
     }
-    
-    setDebug(JSON.stringify({
-      hasSession: !!session,
-      provider: session?.provider,
-      hasAccessToken: !!session?.accessToken,
-    }));
 
     if (!session || !session.accessToken) {
       setFitbitData(prev => ({
@@ -192,34 +179,13 @@ const FitbitDataCard = () => {
         heart: isRateLimitError ? prev.heart : prev.heart,
       }));
       
-      if (isAutoRefresh) {
-        toast({
-          title: isRateLimitError ? "API 요청 한도 초과" : "데이터 동기화 오류",
-          description: error.message || '데이터를 불러오는데 문제가 발생했습니다',
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-        
-        if (isRateLimitError) {
-          setIsAutoRefresh(false);
-        }
-      }
-      
       return null;
     } finally {
       pendingRequest.current = null;
     }
-  }, [session, toast, isAutoRefresh, isInitialLoaded, lastFetchTime]);
+  }, [session, isAutoRefresh, isInitialLoaded, lastFetchTime]);
 
   const handleRefresh = () => {
-    toast({
-      title: "데이터 동기화 중",
-      description: "Fitbit 데이터를 새로 가져오고 있습니다...",
-      status: "info",
-      duration: 2000,
-      isClosable: true,
-    });
     fetchFitbitData(selectedDate, true);
   };
 
@@ -234,7 +200,7 @@ const FitbitDataCard = () => {
   };
 
   const toggleAutoRefresh = () => {
-    setIsAutoRefresh(prev => !prev);
+    setIsAutoRefresh(!isAutoRefresh);
   };
 
   useEffect(() => {
@@ -242,7 +208,6 @@ const FitbitDataCard = () => {
     
     if (isAutoRefresh && session?.accessToken) {
       refreshInterval = setInterval(() => {
-        console.log('자동 새로고침 실행');
         fetchFitbitData(selectedDate);
       }, autoRefreshInterval);
     }
@@ -253,83 +218,17 @@ const FitbitDataCard = () => {
   }, [isAutoRefresh, session, selectedDate, fetchFitbitData, autoRefreshInterval]);
 
   useEffect(() => {
-    // 세션이 없거나 초기 데이터 로딩이 이미 완료된 경우 중복 요청 방지
     if (!session?.accessToken || initialFetchDone.current) {
       return;
     }
     
-    console.log('초기 Fitbit 데이터 로드 시작 - 한 번만 실행');
     initialFetchDone.current = true;
     fetchFitbitData(selectedDate);
     
-    // 컴포넌트가 언마운트될 때 초기화
     return () => {
       initialFetchDone.current = false;
     };
   }, [session, selectedDate, fetchFitbitData]);
-
-  const renderDebugInfo = () => {
-    if (process.env.NODE_ENV !== 'production') {
-      return (
-        <Box mt={4} p={2} bg="gray.100" borderRadius="md">
-          <Text fontSize="xs" fontWeight="bold">디버그 정보:</Text>
-          <Code fontSize="xs" whiteSpace="pre-wrap" w="100%" overflowX="auto">{debug}</Code>
-        </Box>
-      );
-    }
-    return null;
-  };
-
-  const renderLastUpdated = () => {
-    if (!fitbitData.lastUpdated) return null;
-    
-    return (
-      <Text fontSize="xs" color="gray.500">
-        마지막 업데이트: {format(fitbitData.lastUpdated, 'yyyy년 MM월 dd일 HH:mm:ss', { locale: ko })}
-      </Text>
-    );
-  };
-
-  const renderHeaderActions = () => {
-    return (
-      <HStack spacing={2}>
-        <Tooltip label="데이터 동기화">
-          <IconButton
-            aria-label="새로고침"
-            icon={<FiRefreshCw />}
-            size="sm"
-            isLoading={fitbitData.loading}
-            onClick={handleRefresh}
-          />
-        </Tooltip>
-        
-        <Tooltip label={isAutoRefresh ? "자동 동기화 중지" : "자동 동기화 시작"}>
-          <IconButton
-            aria-label="자동 동기화"
-            icon={<FiRefreshCw />}
-            size="sm"
-            colorScheme={isAutoRefresh ? "green" : "gray"}
-            onClick={toggleAutoRefresh}
-          />
-        </Tooltip>
-        
-        <Menu>
-          <Tooltip label="날짜 선택">
-            <MenuButton as={IconButton} aria-label="날짜 선택" icon={<FiCalendar />} size="sm" />
-          </Tooltip>
-          <MenuList>
-            <MenuItem onClick={() => handleDateSelect(0)}>오늘</MenuItem>
-            <MenuItem onClick={() => handleDateSelect(1)}>어제</MenuItem>
-            <MenuItem onClick={() => handleDateSelect(2)}>2일 전</MenuItem>
-            <MenuItem onClick={() => handleDateSelect(3)}>3일 전</MenuItem>
-            <MenuItem onClick={() => handleDateSelect(7)}>일주일 전</MenuItem>
-          </MenuList>
-        </Menu>
-        
-        {isAutoRefresh && <Badge colorScheme="green">자동 동기화 중</Badge>}
-      </HStack>
-    );
-  };
 
   const renderTrendIndicator = (trend: number | undefined) => {
     if (trend === undefined || trend === 0) return null;
@@ -341,6 +240,73 @@ const FitbitDataCard = () => {
           {Math.abs(trend)}%
         </StatHelpText>
       </Stat>
+    );
+  };
+
+  const renderDailyAnalysis = () => {
+    const activityData = fitbitData.activity?.summary;
+    const sleepData = fitbitData.sleep?.summary;
+    const heartData = fitbitData.heart?.['activities-heart']?.[0]?.value;
+    
+    const steps = activityData?.steps || mockTrendData.steps.value;
+    const sleep = sleepData 
+      ? (Math.floor(sleepData.totalTimeInBed / 60) + (sleepData.totalTimeInBed % 60) / 100).toFixed(1) 
+      : mockTrendData.sleep.value;
+    const hrv = mockTrendData.hrv.value;
+    const restingHeartRate = heartData?.restingHeartRate || mockTrendData.heartRate.value;
+    
+    return (
+      <Card bg="white" boxShadow="md" borderRadius="lg" p={4}>
+        <VStack align="stretch" spacing={4}>
+          <Flex justify="space-between">
+            <Heading size="md">건강 인사이트</Heading>
+            <Text color="gray.500">일일 분석</Text>
+          </Flex>
+          
+          <Flex align="center">
+            <Box bg="blue.50" p={2} borderRadius="md" mr={3}>
+              <FiActivity color="#3182CE" />
+            </Box>
+            <Text fontSize="lg" fontWeight="medium">일일 활동 및 회복</Text>
+          </Flex>
+          
+          <Text>
+            오늘은 {steps.toLocaleString()}걸음과 {sleep}시간 수면으로 심장 및 전반적인 건강을 
+            {steps >= 8000 ? ' 잘 ' : ' 적절히 '}
+            유지하고 있습니다. 
+            {steps < 10000 
+              ? `최적의 심혈관 건강을 위해 ${(10000 - steps).toLocaleString()}걸음 더 걸으면 10,000걸음 목표에 도달할 수 있습니다.` 
+              : '10,000걸음 목표를 달성하셨습니다! 훌륭합니다.'}
+            {' '}
+            HRV(현재 {hrv}ms)는 
+            {hrv >= 50 ? '정상 범위 이상입니다! 스트레스 대처 능력이 좋은 상태입니다.' : 
+             hrv >= 40 ? '정상 범위입니다. 명상이나 가벼운 유산소 운동을 통해 스트레스 대처 능력과 전반적인 회복력을 향상시킬 수 있습니다.' : 
+             '정상보다 약간 낮습니다. 더 많은 휴식과 스트레스 관리가 필요할 수 있습니다.'}
+            {' '}
+            안정시 심박수는 {restingHeartRate}bpm으로 
+            {restingHeartRate <= 60 ? '매우 건강한 수준입니다.' : 
+             restingHeartRate <= 70 ? '양호한 상태입니다.' : 
+             restingHeartRate <= 80 ? '보통 수준입니다.' : 
+             '약간 높은 편입니다. 유산소 운동을 통해 개선해보세요.'}
+          </Text>
+          
+          <Box>
+            <Text fontWeight="medium" mb={2}>추천사항</Text>
+            <HStack spacing={2} mb={2}>
+              <Box color="blue.500"><FiCheckCircle /></Box>
+              <Text>{steps < 10000 ? `오늘 ${Math.min(3000, 10000 - steps).toLocaleString()}걸음 더 걸어 활동량 늘리기` : '걸음수 목표 달성을 유지하기'}</Text>
+            </HStack>
+            <HStack spacing={2} mb={2}>
+              <Box color="blue.500"><FiCheckCircle /></Box>
+              <Text>{hrv < 45 ? '취침 전 심호흡 운동으로 HRV 개선하기' : 'HRV 수준을 유지하기 위한 규칙적 휴식 취하기'}</Text>
+            </HStack>
+            <HStack spacing={2}>
+              <Box color="blue.500"><FiCheckCircle /></Box>
+              <Text>{Number(sleep) < 7 ? `수면 시간을 ${(7 - Number(sleep)).toFixed(1)}시간 증가시켜 최소 7시간 수면 취하기` : '최적의 회복을 위한 일관된 수면 패턴 유지하기'}</Text>
+            </HStack>
+          </Box>
+        </VStack>
+      </Card>
     );
   };
 
@@ -360,16 +326,16 @@ const FitbitDataCard = () => {
 
     return (
       <Stack spacing={6}>
-        <SimpleGrid columns={{ base: 1, sm: 2, md: 4 }} spacing={4}>
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} gap={4}>
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiHeart color="#3182CE" />
+                <Box color="blue.500">
+                  <FiHeart size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.heartRate.trend)}
               </Flex>
-              <Text fontSize="sm" color="gray.500" mt={2}>Heart Rate</Text>
+              <Text fontSize="sm" color="gray.500" mt={2}>심박수</Text>
               <Flex align="baseline">
                 <Text fontSize="3xl" fontWeight="bold">{heartData?.restingHeartRate || mockTrendData.heartRate.value}</Text>
                 <Text ml={1} fontSize="md" color="gray.500">bpm</Text>
@@ -380,12 +346,12 @@ const FitbitDataCard = () => {
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiActivity color="#3182CE" />
+                <Box color="blue.500">
+                  <FiActivity size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.steps.trend)}
               </Flex>
-              <Text fontSize="sm" color="gray.500" mt={2}>Steps</Text>
+              <Text fontSize="sm" color="gray.500" mt={2}>걸음 수</Text>
               <Text fontSize="3xl" fontWeight="bold">
                 {activityData?.steps?.toLocaleString() || mockTrendData.steps.value.toLocaleString()}
               </Text>
@@ -395,17 +361,17 @@ const FitbitDataCard = () => {
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiMoon color="#3182CE" />
+                <Box color="blue.500">
+                  <FiMoon size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.sleep.trend)}
               </Flex>
-              <Text fontSize="sm" color="gray.500" mt={2}>Sleep</Text>
+              <Text fontSize="sm" color="gray.500" mt={2}>수면</Text>
               <Flex align="baseline">
                 <Text fontSize="3xl" fontWeight="bold">
                   {sleepData ? (Math.floor(sleepData.totalTimeInBed / 60) + (sleepData.totalTimeInBed % 60) / 100).toFixed(1) : mockTrendData.sleep.value}
                 </Text>
-                <Text ml={1} fontSize="md" color="gray.500">hrs</Text>
+                <Text ml={1} fontSize="md" color="gray.500">시간</Text>
               </Flex>
             </CardBody>
           </Card>
@@ -413,12 +379,12 @@ const FitbitDataCard = () => {
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiZap color="#3182CE" />
+                <Box color="blue.500">
+                  <FiZap size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.calories.trend)}
               </Flex>
-              <Text fontSize="sm" color="gray.500" mt={2}>Calories</Text>
+              <Text fontSize="sm" color="gray.500" mt={2}>칼로리</Text>
               <Flex align="baseline">
                 <Text fontSize="3xl" fontWeight="bold">
                   {activityData?.caloriesOut || mockTrendData.calories.value}
@@ -433,17 +399,17 @@ const FitbitDataCard = () => {
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiClock color="#3182CE" />
+                <Box color="blue.500">
+                  <FiClock size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.activeMinutes.trend)}
               </Flex>
-              <Text fontSize="sm" color="gray.500" mt={2}>Active Minutes</Text>
+              <Text fontSize="sm" color="gray.500" mt={2}>활동 시간</Text>
               <Flex align="baseline">
                 <Text fontSize="3xl" fontWeight="bold">
                   {activityData ? (activityData.fairlyActiveMinutes || 0) + (activityData.veryActiveMinutes || 0) : mockTrendData.activeMinutes.value}
                 </Text>
-                <Text ml={1} fontSize="md" color="gray.500">min</Text>
+                <Text ml={1} fontSize="md" color="gray.500">분</Text>
               </Flex>
             </CardBody>
           </Card>
@@ -451,8 +417,8 @@ const FitbitDataCard = () => {
           <Card bg="white" boxShadow="md" borderRadius="lg">
             <CardBody p={4}>
               <Flex align="center" justify="space-between" mb={1}>
-                <Box bg="blue.50" p={2} borderRadius="md">
-                  <FiZoomIn color="#3182CE" />
+                <Box color="blue.500">
+                  <FiTrendingUp size="24px" />
                 </Box>
                 {renderTrendIndicator(mockTrendData.hrv.trend)}
               </Flex>
@@ -470,13 +436,13 @@ const FitbitDataCard = () => {
             <Flex justify="space-between" mb={2}>
               <Box>
                 <Flex align="center">
-                  <Box bg="blue.50" p={2} borderRadius="md" mr={2}>
-                    <FiMoon color="#3182CE" />
+                  <Box color="blue.500" mr={2}>
+                    <FiMoon size="24px" />
                   </Box>
-                  <Text fontWeight="medium">Sleep Quality</Text>
+                  <Text fontWeight="medium">수면 품질</Text>
                 </Flex>
               </Box>
-              <Text fontWeight="bold" color="blue.500">Last Night</Text>
+              <Text fontWeight="bold" color="blue.500">지난 밤</Text>
             </Flex>
             
             <Progress 
@@ -488,9 +454,9 @@ const FitbitDataCard = () => {
             />
             
             <Flex justify="space-between">
-              <Text fontSize="sm" color="gray.500">Hours Slept</Text>
+              <Text fontSize="sm" color="gray.500">수면 시간</Text>
               <Text fontWeight="bold">
-                {sleepData ? `${Math.floor(sleepData.totalTimeInBed / 60)}.${sleepData.totalTimeInBed % 60} hrs` : `${mockTrendData.sleep.value} hrs`}
+                {sleepData ? `${Math.floor(sleepData.totalTimeInBed / 60)}.${sleepData.totalTimeInBed % 60} 시간` : `${mockTrendData.sleep.value} 시간`}
               </Text>
             </Flex>
             <Text fontSize="sm" fontWeight="bold" textAlign="right" mt={1}>
@@ -498,13 +464,15 @@ const FitbitDataCard = () => {
             </Text>
           </CardBody>
         </Card>
+
+        {renderDailyAnalysis()}
       </Stack>
     );
   };
 
   if (!session?.accessToken) {
     return (
-      <Card>
+      <Card boxShadow="md" borderRadius="lg">
         <CardHeader>
           <Heading size="md">Fitbit 데이터</Heading>
         </CardHeader>
@@ -513,7 +481,6 @@ const FitbitDataCard = () => {
             <AlertIcon />
             Fitbit 계정으로 로그인하면 건강 데이터를 확인할 수 있습니다.
           </Alert>
-          {renderDebugInfo()}
         </CardBody>
       </Card>
     );
@@ -521,15 +488,14 @@ const FitbitDataCard = () => {
 
   if (fitbitData.loading && !isInitialLoaded) {
     return (
-      <Card>
+      <Card boxShadow="md" borderRadius="lg">
         <CardHeader>
           <Heading size="md">Fitbit 데이터 로딩 중</Heading>
         </CardHeader>
         <CardBody>
           <Flex justifyContent="center" alignItems="center" p={10}>
-            <Spinner size="xl" />
+            <Spinner size="xl" colorScheme="blue" />
           </Flex>
-          {renderDebugInfo()}
         </CardBody>
       </Card>
     );
@@ -537,7 +503,7 @@ const FitbitDataCard = () => {
 
   if (fitbitData.error && !isInitialLoaded) {
     return (
-      <Card>
+      <Card boxShadow="md" borderRadius="lg">
         <CardHeader>
           <Heading size="md">Fitbit 데이터</Heading>
         </CardHeader>
@@ -546,15 +512,14 @@ const FitbitDataCard = () => {
             <AlertIcon />
             {fitbitData.error}
           </Alert>
-          <Button mt={4} onClick={() => fetchFitbitData(selectedDate)}>다시 시도</Button>
-          {renderDebugInfo()}
+          <Button mt={4} colorScheme="blue" onClick={() => fetchFitbitData(selectedDate)}>다시 시도</Button>
         </CardBody>
       </Card>
     );
   }
 
   return (
-    <Card>
+    <Card boxShadow="md" borderRadius="lg">
       <CardHeader>
         <Flex justify="space-between" align="center">
           <HStack>
@@ -568,9 +533,48 @@ const FitbitDataCard = () => {
               </Badge>
             )}
           </HStack>
-          {renderHeaderActions()}
+          <HStack spacing={2}>
+            <Tooltip label="데이터 동기화">
+              <IconButton
+                aria-label="새로고침"
+                icon={<FiRefreshCw />}
+                size="sm"
+                isLoading={fitbitData.loading}
+                onClick={handleRefresh}
+              />
+            </Tooltip>
+            
+            <Tooltip label={isAutoRefresh ? "자동 동기화 중지" : "자동 동기화 시작"}>
+              <IconButton
+                aria-label="자동 동기화"
+                icon={<FiRefreshCw />}
+                size="sm"
+                colorScheme={isAutoRefresh ? "green" : "gray"}
+                onClick={toggleAutoRefresh}
+              />
+            </Tooltip>
+            
+            <Menu>
+              <Tooltip label="날짜 선택">
+                <MenuButton as={IconButton} aria-label="날짜 선택" icon={<FiCalendar />} size="sm" />
+              </Tooltip>
+              <MenuList>
+                <MenuItem onClick={() => handleDateSelect(0)}>오늘</MenuItem>
+                <MenuItem onClick={() => handleDateSelect(1)}>어제</MenuItem>
+                <MenuItem onClick={() => handleDateSelect(2)}>2일 전</MenuItem>
+                <MenuItem onClick={() => handleDateSelect(3)}>3일 전</MenuItem>
+                <MenuItem onClick={() => handleDateSelect(7)}>일주일 전</MenuItem>
+              </MenuList>
+            </Menu>
+            
+            {isAutoRefresh && <Badge colorScheme="green">자동 동기화 중</Badge>}
+          </HStack>
         </Flex>
-        {renderLastUpdated()}
+        {fitbitData.lastUpdated && (
+          <Text fontSize="xs" color="gray.500">
+            마지막 업데이트: {format(fitbitData.lastUpdated, 'yyyy년 MM월 dd일 HH:mm:ss', { locale: ko })}
+          </Text>
+        )}
       </CardHeader>
       <CardBody>
         <Stack spacing={4}>
@@ -586,7 +590,7 @@ const FitbitDataCard = () => {
           
           {fitbitData.loading && (
             <Flex justify="center">
-              <Spinner size="sm" mr={2} />
+              <Spinner size="sm" mr={2} colorScheme="blue" />
               <Text>데이터 동기화 중...</Text>
             </Flex>
           )}
@@ -597,8 +601,6 @@ const FitbitDataCard = () => {
               {fitbitData.error}
             </Alert>
           )}
-          
-          {renderDebugInfo()}
         </Stack>
       </CardBody>
     </Card>
