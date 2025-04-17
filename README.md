@@ -101,7 +101,37 @@ Or with npm:
 npm install
 ```
 
-### 3. Run the development server
+### 3. Create a `.env.local` file
+Create a `.env.local` file in the root directory of the project and add your environment variables. You can use the `.env.example` file as a reference.
+
+```bash
+cp .env.example .env.local
+```
+
+### 4. Set up MongoDB
+
+스크립트에 실행 권한을 부여했으니 이제 MongoDB를 시작할 수 있습니다. 다음 명령어로 MongoDB를 실행할 수 있습니다:
+
+```bash
+./start-mongodb.sh
+```
+
+이 스크립트는 .env.local 파일의 환경 변수를 읽어오고 Docker Compose를 사용해 MongoDB를 백그라운드로 실행합니다.
+
+### 구성된 MongoDB 환경
+
+- **데이터베이스**: harucare (환경 변수에서 변경 가능)
+- **사용자**: harucare_user
+- **비밀번호**: harucare_password
+- **포트**: 27017 (기본값)
+- **연결 문자열**: mongodb://harucare_user:harucare_password@localhost:27017/harucare
+
+### 자동 생성된 컬렉션 및 인덱스
+
+- `users` 컬렉션 - 사용자 정보 저장 (email 필드에 유니크 인덱스)
+- `fitbit_activities` 컬렉션 - Fitbit 데이터 저장 (userId와 date 필드 조합에 유니크 인덱스)
+
+### 5. Run the development server
 
 ```bash
 yarn dev
@@ -109,7 +139,7 @@ yarn dev
 npm run dev
 ```
 
-### 4. Open in browser
+### 6. Open in browser
 
 Go to: [http://localhost:3000](http://localhost:3000)
 
@@ -128,9 +158,9 @@ Go to: [http://localhost:3000](http://localhost:3000)
 - [x] Chakra UI integration
 - [x] User authentication with Google OAuth
 - [x] Social features (activities & challenges)
-- [ ] Fitbit OAuth and data sync
+- [x] Fitbit OAuth and data sync
 - [ ] Integrate GPT API for generated insights
-- [ ] MongoDB integration for user history
+- [x] MongoDB integration for user history
 - [x] User dashboard
 
 ---

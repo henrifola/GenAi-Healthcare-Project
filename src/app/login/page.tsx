@@ -1,30 +1,24 @@
 'use client';
 
-import { useSession, signIn } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { Button, Input, VStack, Heading, Box } from '@chakra-ui/react';
+import { useEffect } from 'react';
+import { 
+  VStack, 
+  Heading, 
+  Box
+} from '@chakra-ui/react';
+import FitbitLoginButton from '@/components/auth/FitbitLoginButton';
 
 export default function LoginPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
 
   useEffect(() => {
     if (session) {
       router.push('/dashboard');
     }
   }, [session, router]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await signIn('credentials', {
-      email,
-      password,
-      redirect: false,
-    });
-  };
 
   return (
     <Box
@@ -37,27 +31,11 @@ export default function LoginPage() {
     >
       <VStack gap={4} width="100%" maxW="400px">
         <Heading>Login</Heading>
-        <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-          <VStack gap={4} width="100%">
-            <Input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-            <Button type="submit" colorScheme="blue" width="100%">
-              Sign In
-            </Button>
-          </VStack>
-        </form>
+        
+        {/* Fitbit 로그인 버튼 */}
+        <VStack width="100%" spacing={4}>
+          <FitbitLoginButton />
+        </VStack>
       </VStack>
     </Box>
   );
