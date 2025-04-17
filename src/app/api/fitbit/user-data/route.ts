@@ -4,7 +4,6 @@ import { nextAuthOptions } from '@/lib/auth/nextAuthOptions';
 import connectDB from '@/lib/db/mongoose';
 import User from '@/lib/db/models/user.model';
 import FitbitActivity from '@/lib/db/models/fitbit-activity.model';
-import mongoose from 'mongoose';
 import { jwtDecode } from 'jwt-decode';
 
 // Fitbit API 기본 URL (버전 1로 고정)
@@ -33,38 +32,24 @@ async function getTokenFromRequest(req: NextRequest) {
 
     // 쿠키에서 세션 토큰 확인
     const sessionToken = req.cookies.get('next-auth.session-token')?.value || 
-                         req.cookies.get('__Secure-next-auth.session-token')?.value;
+                       req.cookies.get('__Secure-next-auth.session-token')?.value;
     
     if (!sessionToken) {
       return { token: null, source: null };
     }
     
-    // JWT 검증을 시도하기 전에 기본 형식 검사
-    // JWT는 header.payload.signature 형식이어야 함
-    if (!sessionToken.includes('.') || sessionToken.split('.').length !== 3) {
-      console.log('세션 토큰이 JWT 형식이 아님, 세션 조회로 전환');
-      return { token: null, source: 'session' };
-    }
-    
     try {
+      // JWT 디코딩 시도
       const decoded = jwtDecode<any>(sessionToken);
-      // 디코딩은 성공했지만 accessToken이 없는 경우
-      if (!decoded.accessToken) {
-        console.log('JWT에서 accessToken을 찾을 수 없음, 세션 조회로 전환');
-        return { token: null, source: 'session' };
-      }
-      
       return { 
         token: decoded.accessToken, 
         source: 'cookie',
         decoded
       };
     } catch (e) {
-      console.log('표준 JWT 디코딩 실패, 세션 조회로 전환:', e.message);
-      return { token: null, source: 'session', error: e };
+      return { token: null, source: null, error: e };
     }
   } catch (e) {
-    console.log('토큰 추출 오류:', e.message);
     return { token: null, source: null, error: e };
   }
 }
@@ -94,30 +79,21 @@ function setCacheData(cacheKey: string, data: any): void {
 
 // 서버 측에서 Fitbit API 호출하는 함수
 async function fetchFitbitDataFromServer(url: string, accessToken: string, retryCount = 0, maxRetries = 3) {
-  // 캐시 키 생성
-  const cacheKey = `${url}_${accessToken.substring(0, 10)}`;
+  const cacheKey = `${url}-${accessToken.substring(0, 10)}`;
   
   // 캐시 확인
   const cachedData = getCachedData(cacheKey);
   if (cachedData) {
-    console.log(`캐시에서 데이터 반환: ${url}`);
     return cachedData;
   }
   
+  // 429 오류에 대한 지수 백오프 재시도
+  if (retryCount > 0) {
+    const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // 최대 10초
+    await delay(delayMs);
+  }
+  
   try {
-    // 재시도 시 지연 시간 추가 (지수 백오프)
-    if (retryCount > 0) {
-      const delayMs = Math.min(1000 * Math.pow(2, retryCount - 1), 10000); // 최대 10초 지연
-      console.log(`재시도 ${retryCount}/${maxRetries}, ${delayMs}ms 후 다시 시도...`);
-      await delay(delayMs);
-    }
-
-    console.log(`Fitbit API 요청: ${FITBIT_API_URL}${url}`);
-    
-    // 전체 URL 로깅
-    const fullUrl = `${FITBIT_API_URL}${url}`;
-    console.log('전체 URL:', fullUrl);
-    
     const headers = {
       'Authorization': `Bearer ${accessToken}`,
       'Accept-Language': 'ko_KR',
@@ -125,47 +101,22 @@ async function fetchFitbitDataFromServer(url: string, accessToken: string, retry
       'Cache-Control': 'no-cache'
     };
     
-    console.log('요청 헤더:', {
-      ...headers,
-      'Authorization': 'Bearer [MASKED]' // 실제 토큰은 로그에 표시하지 않음
-    });
-    
-    const response = await fetch(fullUrl, {
+    const response = await fetch(`${FITBIT_API_URL}${url}`, {
       method: 'GET',
       headers,
       cache: 'no-store'
     });
 
-    console.log('API 응답 상태:', response.status, response.statusText);
-
-    // 응답 본문 텍스트 가져오기
-    let responseText;
-    try {
-      responseText = await response.text();
-      console.log('응답 본문 미리보기:', responseText.substring(0, 100));
-    } catch (e) {
-      console.error('응답 본문을 가져오는데 실패:', e);
-      responseText = '';
-    }
-
     // 429 Too Many Requests 오류 처리
     if (response.status === 429 && retryCount < maxRetries) {
-      console.log('API 호출 한도 초과. 잠시 후 재시도합니다.');
       return await fetchFitbitDataFromServer(url, accessToken, retryCount + 1, maxRetries);
     }
 
     if (!response.ok) {
-      console.error('Fitbit API 응답 오류:', {
-        status: response.status,
-        statusText: response.statusText,
-        url: fullUrl,
-        body: responseText.substring(0, 200) // 응답 본문 일부만 로깅
-      });
-      
-      // 오류 응답이 JSON인 경우 자세한 오류 정보 파싱 시도
+      // 오류 응답 처리
       let errorDetail = '';
       try {
-        const errorJson = JSON.parse(responseText);
+        const errorJson = await response.json();
         if (errorJson.errors && errorJson.errors.length > 0) {
           errorDetail = ` - ${errorJson.errors.map((e: any) => e.message || e.errorType).join(', ')}`;
         } else if (errorJson.error) {
@@ -179,30 +130,18 @@ async function fetchFitbitDataFromServer(url: string, accessToken: string, retry
       if (response.status === 429) {
         throw new Error(`Fitbit API 요청 한도 초과. 잠시 후 다시 시도해주세요. (429 Too Many Requests)${errorDetail}`);
       }
-      
+
       throw new Error(`Fitbit API 오류: ${response.status} ${response.statusText}${errorDetail}`);
     }
 
-    // 성공 응답 처리
-    if (!responseText) {
-      console.log('응답 본문이 비어있음');
-      return {};
-    }
-
     // JSON 파싱 시도
-    try {
-      const data = JSON.parse(responseText);
-      
-      // 성공한 응답 캐시에 저장
-      setCacheData(cacheKey, data);
-      
-      return data;
-    } catch (error) {
-      console.error('JSON 파싱 오류:', error, '원본 텍스트:', responseText.substring(0, 100));
-      throw new Error('응답을 JSON으로 파싱할 수 없습니다.');
-    }
+    const data = await response.json();
+    
+    // 성공한 응답 캐시에 저장
+    setCacheData(cacheKey, data);
+    
+    return data;
   } catch (error) {
-    console.error('Fitbit API 요청 실패:', error);
     throw error;
   }
 }
@@ -225,7 +164,6 @@ async function saveUserDataToDb(session: any, date: string, fitbitData: any) {
         image: session.user?.image,
         fitbitId: session.fitbitId || session.user?.id,
       });
-      console.log('새 사용자 생성됨:', user._id);
     }
     
     // Fitbit 활동 데이터 저장 또는 업데이트
@@ -237,21 +175,22 @@ async function saveUserDataToDb(session: any, date: string, fitbitData: any) {
         heart: fitbitData.heart || null,
         sleep: fitbitData.sleep || null,
         hrv: fitbitData.hrv || null,
-        activities: fitbitData.activity?.activities || [],
+        activities: fitbitData.activity?.activities || []
       }
     };
     
     // upsert: true - 데이터가 없으면 생성, 있으면 업데이트
     await FitbitActivity.findOneAndUpdate(
-      { userId: user._id, date: date },
-      activityData,
-      { upsert: true, new: true }
+      { userId: user._id, date: date }, 
+      activityData, 
+      {
+        upsert: true,
+        new: true
+      }
     );
     
-    console.log('Fitbit 데이터 저장 완료:', date);
     return true;
   } catch (error) {
-    console.error('MongoDB 저장 오류:', error);
     return false;
   }
 }
@@ -278,7 +217,6 @@ export async function GET(request: NextRequest) {
           email: authUser || 'unknown@fitbit.user',
         }
       };
-      console.log('커스텀 헤더에서 인증 정보 사용');
     } else {
       // 2. 쿠키에서 토큰 추출 시도
       const tokenInfo = await getTokenFromRequest(request);
@@ -288,62 +226,43 @@ export async function GET(request: NextRequest) {
         session = {
           accessToken: tokenInfo.token,
           provider: 'fitbit',
-          user: tokenInfo.decoded || { email: 'unknown@fitbit.user' }
+          user: tokenInfo.decoded?.user || { email: tokenInfo.decoded?.email || 'unknown@fitbit.user' }
         };
-        console.log(`쿠키에서 토큰 추출 성공 (${tokenInfo.source})`);
       } else {
         // 3. 기존 NextAuth 세션 사용
         session = await getServerSession(nextAuthOptions);
-        
         if (session) {
           accessToken = session.accessToken;
         }
       }
     }
     
-    // 세션 정보 확인
-    console.log('세션 정보:', {
-      hasSession: !!session,
-      provider: session?.provider,
-      hasAccessToken: !!accessToken,
-      tokenLength: accessToken ? accessToken.length : 0
-    });
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    }
     
     // 토큰 검증
     if (!accessToken) {
-      console.log('액세스 토큰 없음');
-      return NextResponse.json({ error: 'Fitbit 액세스 토큰이 없습니다. 재로그인이 필요합니다.' }, { status: 403 });
-    }
-    
-    if (!session) {
-      console.log('세션 없음');
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+      return NextResponse.json({
+        error: 'Fitbit 액세스 토큰이 없습니다. 재로그인이 필요합니다.'
+      }, { status: 403 });
     }
     
     // 요청 파라미터 가져오기
     const searchParams = request.nextUrl.searchParams;
+    const date = searchParams.get('date') || 'today';
     const dataType = searchParams.get('type') || 'all';
-    let date = searchParams.get('date') || 'today';
     
-    // 'today'인 경우 실제 오늘 날짜로 변환 (YYYY-MM-DD 형식)
-    if (date === 'today') {
-      const today = new Date();
-      date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      console.log(`'today'를 실제 날짜로 변환: ${date}`);
-    }
-    
-    // 요청 키 생성 (중복 요청 방지)
-    const requestKey = `${dataType}_${date}_${accessToken.substring(0, 10)}`;
+    // 동일한 요청에 대한 중복 방지를 위한 키
+    const requestKey = `${date}-${dataType}-${accessToken.substring(0, 10)}`;
     
     // 이미 진행 중인 동일한 요청이 있는지 확인
     if (pendingRequests[requestKey]) {
-      console.log('이미 진행 중인 동일한 요청이 있습니다. 해당 요청 결과를 기다립니다.');
       try {
         // 기존 요청의 결과를 기다림
         const data = await pendingRequests[requestKey];
         return NextResponse.json(data);
       } catch (error: any) {
-        console.error('기존 요청에서 오류 발생:', error);
         return NextResponse.json(
           { error: '데이터 가져오기 실패', message: error.message },
           { status: 500 }
@@ -362,9 +281,7 @@ export async function GET(request: NextRequest) {
             break;
             
           case 'activity':
-            const activityData = await fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken);
-            console.log('활동 데이터 구조:', JSON.stringify(activityData).substring(0, 300) + '...');
-            data = activityData;
+            data = await fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken);
             break;
             
           case 'sleep':
@@ -376,20 +293,19 @@ export async function GET(request: NextRequest) {
             break;
             
           case 'all':
-            // Promise.all을 사용하여 여러 요청을 병렬로 처리
             try {
+              // 모든 데이터 병렬로 가져오기
               const [profile, activity, sleep, heart] = await Promise.all([
-                fetchFitbitDataFromServer('/user/-/profile.json', accessToken),
+                fetchFitbitDataFromServer('/user/-/profile.json', accessToken).catch(e => {
+                  return null;
+                }),
                 fetchFitbitDataFromServer(`/user/-/activities/date/${date}.json`, accessToken).catch(e => {
-                  console.log(`활동 데이터 가져오기 실패: ${e.message}, 계속 진행`);
                   return null;
                 }),
                 fetchFitbitDataFromServer(`/user/-/sleep/date/${date}.json`, accessToken).catch(e => {
-                  console.log(`수면 데이터 가져오기 실패: ${e.message}, 계속 진행`);
                   return null;
                 }),
                 fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken).catch(e => {
-                  console.log(`심박수 데이터 가져오기 실패: ${e.message}, 계속 진행`);
                   return null;
                 })
               ]);
@@ -408,7 +324,6 @@ export async function GET(request: NextRequest) {
               // MongoDB에 데이터 저장
               await saveUserDataToDb(session, date, data);
             } catch (e) {
-              console.error('모든 데이터 가져오기 실패, 가능한 데이터 반환:', e);
               if (Object.keys(data).length === 0) {
                 throw e; // 아무 데이터도 없으면 오류 발생
               }
@@ -419,11 +334,8 @@ export async function GET(request: NextRequest) {
             throw new Error('유효하지 않은 데이터 타입입니다.');
         }
         
-        console.log('데이터 가져오기 성공:', Object.keys(data));
         return data;
       } catch (error: any) {
-        console.error(`${dataType} 데이터 요청 실패:`, error);
-        
         let status = 500;
         let message = error.message || '데이터를 가져오는데 실패했습니다';
         
@@ -448,13 +360,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: '데이터 가져오기 실패', 
-          message: error.message,
-          dataType: dataType,
-          debug: {
-            provider: session?.provider,
-            hasToken: !!accessToken,
-            tokenLength: accessToken?.length
-          }
+          message: error.message
         }, 
         { status: error.status || 500 }
       );
@@ -466,7 +372,6 @@ export async function GET(request: NextRequest) {
     }
     
   } catch (error: any) {
-    console.error('API 핸들러 오류:', error);
     return NextResponse.json(
       { error: '서버 오류', message: error.message },
       { status: 500 }

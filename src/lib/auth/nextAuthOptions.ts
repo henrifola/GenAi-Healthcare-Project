@@ -1,7 +1,6 @@
 // lib/auth/nextAuthOptions.ts
 import type { NextAuthOptions, Session } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
-import { jwtDecode } from 'jwt-decode';
 
 declare module 'next-auth' {
   interface Session {

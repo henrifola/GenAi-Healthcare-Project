@@ -99,7 +99,7 @@ const FitbitDataCard = () => {
       };
       localStorage.setItem(`${CACHE_KEY_PREFIX}${key}`, JSON.stringify(cacheItem));
     } catch (error) {
-      console.error('캐시 저장 오류:', error);
+      // 캐시 저장 오류 무시
     }
   };
 
@@ -120,14 +120,12 @@ const FitbitDataCard = () => {
       
       return cacheItem.data;
     } catch (error) {
-      console.error('캐시 조회 오류:', error);
       return null;
     }
   };
 
   const fetchFitbitData = useCallback(async (date: string = 'today', force: boolean = false) => {
     if (pendingRequest.current) {
-      console.log('이미 진행 중인 요청이 있습니다. 기존 요청을 재사용합니다.');
       return pendingRequest.current;
     }
 
@@ -149,8 +147,6 @@ const FitbitDataCard = () => {
       const cachedData = getFromCache(cacheKey);
       
       if (cachedData) {
-        console.log(`캐시된 데이터 사용 중... 날짜: ${date}`);
-        
         setFitbitData({
           profile: cachedData.profile,
           activity: cachedData.activity,
@@ -167,13 +163,8 @@ const FitbitDataCard = () => {
         
         // 캐시가 5분 내라면 API 호출 건너뛰기
         if (timeSinceLastFetch < CACHE_TIMEOUT) {
-          console.log(`최근 캐시 사용 중... 마지막 요청: ${Math.round(timeSinceLastFetch / 1000)}초 전`);
           return cachedData;
         }
-        
-        // 캐시가 있지만 5분이 지났으면 백그라운드에서 새로운 데이터 가져오기
-        console.log('캐시가 5분 이상 지났습니다. 백그라운드에서 데이터 다시 가져오기...');
-        // 로딩 상태는 true로 설정하지 않음 (백그라운드 갱신이므로 UI에 로딩 표시 안함)
       }
     }
 
@@ -182,8 +173,6 @@ const FitbitDataCard = () => {
       if (force || !getFromCache(cacheKey)) {
         setFitbitData(prev => ({ ...prev, loading: true, error: null }));
       }
-      
-      console.log(`Fitbit 데이터 요청 중... 날짜: ${date}`);
       
       pendingRequest.current = fetch(`/api/fitbit/user-data?date=${date}&type=all`).then(async (response) => {
         if (response.status === 429) {
@@ -197,11 +186,6 @@ const FitbitDataCard = () => {
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          console.error('API 응답 오류:', {
-            status: response.status,
-            statusText: response.statusText,
-            error: errorData
-          });
           throw new Error(errorData.message || `Fitbit 데이터를 가져오는데 실패했습니다: ${response.status} ${response.statusText}`);
         }
         
@@ -209,7 +193,6 @@ const FitbitDataCard = () => {
       });
       
       const data = await pendingRequest.current;
-      console.log('Fitbit 데이터 수신:', Object.keys(data));
       
       // 로컬 스토리지에 캐시 저장
       const currentTime = Date.now();
@@ -242,8 +225,6 @@ const FitbitDataCard = () => {
       
       return data;
     } catch (error: any) {
-      console.error('Fitbit 데이터 요청 오류:', error);
-      
       const isRateLimitError = error.message && (
         error.message.includes('429') || 
         error.message.includes('Too Many Requests') || 

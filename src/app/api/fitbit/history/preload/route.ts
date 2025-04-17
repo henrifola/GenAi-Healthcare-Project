@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     }
     
     // 각 날짜별로 데이터 가져오기 및 저장 (최대 5개의 요청을 병렬로 처리)
-    const batchSize = 5; // Fitbit API 속도 제한 때문에 더 작은 배치 사이즈로 수정
+    const batchSize = 5; // Fitbit API 속도 제한 때문에 더 작은 배치 사이즈로 설정
     const results = { 
       totalDays: dateRange.length, 
       processed: 0, 
@@ -108,7 +108,6 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('데이터 사전 로드 오류:', error);
     return NextResponse.json(
       { error: '데이터 사전 로드 실패', message: error.message }, 
       { status: 500 }

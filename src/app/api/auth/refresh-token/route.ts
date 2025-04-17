@@ -50,7 +50,6 @@ export async function POST(request: Request) {
       expires_in: tokenData.expires_in,
     });
   } catch (error) {
-    console.error('Token refresh error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
