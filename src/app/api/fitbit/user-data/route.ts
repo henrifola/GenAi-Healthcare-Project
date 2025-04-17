@@ -250,8 +250,15 @@ export async function GET(request: NextRequest) {
     
     // 요청 파라미터 가져오기
     const searchParams = request.nextUrl.searchParams;
-    const date = searchParams.get('date') || 'today';
+    let date = searchParams.get('date') || 'today';
     const dataType = searchParams.get('type') || 'all';
+    
+    // 'today'를 실제 날짜 형식(YYYY-MM-DD)으로 변환
+    if (date === 'today') {
+      const today = new Date();
+      date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      console.log(`'today'를 실제 날짜로 변환: ${date}`);
+    }
     
     // 동일한 요청에 대한 중복 방지를 위한 키
     const requestKey = `${date}-${dataType}-${accessToken.substring(0, 10)}`;
