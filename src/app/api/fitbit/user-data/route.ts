@@ -39,32 +39,32 @@ async function getTokenFromRequest(req: NextRequest) {
       return { token: null, source: null };
     }
     
+    // JWT 검증을 시도하기 전에 기본 형식 검사
+    // JWT는 header.payload.signature 형식이어야 함
+    if (!sessionToken.includes('.') || sessionToken.split('.').length !== 3) {
+      console.log('세션 토큰이 JWT 형식이 아님, 세션 조회로 전환');
+      return { token: null, source: 'session' };
+    }
+    
     try {
-      // JWT 디코딩 시도 - 안전하게 처리
-      try {
-        // 먼저 표준 JWT 토큰으로 디코딩 시도
-        const decoded = jwtDecode<any>(sessionToken);
-        return { 
-          token: decoded.accessToken, 
-          source: 'cookie',
-          decoded
-        };
-      } catch (decodeError) {
-        console.error('표준 JWT 디코딩 실패, 세션 쿠키로 처리 시도:', decodeError);
-        
-        // NextAuth의 암호화된 쿠키일 수 있으므로 세션 조회 방식으로 전환
-        return { 
-          token: null, 
-          source: 'session',
-          error: decodeError 
-        };
+      const decoded = jwtDecode<any>(sessionToken);
+      // 디코딩은 성공했지만 accessToken이 없는 경우
+      if (!decoded.accessToken) {
+        console.log('JWT에서 accessToken을 찾을 수 없음, 세션 조회로 전환');
+        return { token: null, source: 'session' };
       }
+      
+      return { 
+        token: decoded.accessToken, 
+        source: 'cookie',
+        decoded
+      };
     } catch (e) {
-      console.error('JWT 디코딩 오류:', e);
-      return { token: null, source: null, error: e };
+      console.log('표준 JWT 디코딩 실패, 세션 조회로 전환:', e.message);
+      return { token: null, source: 'session', error: e };
     }
   } catch (e) {
-    console.error('토큰 추출 오류:', e);
+    console.log('토큰 추출 오류:', e.message);
     return { token: null, source: null, error: e };
   }
 }
