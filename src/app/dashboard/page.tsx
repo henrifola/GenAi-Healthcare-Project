@@ -14,6 +14,7 @@ import {
 } from '@chakra-ui/react';
 import { FiLogOut } from 'react-icons/fi';
 import FitbitDataCard from '@/components/dashboard/FitbitDataCard';
+import FitbitHistoryCard from '@/components/dashboard/FitbitHistoryCard';
 import { HealthMetrics } from '@/types/dashboard';
 
 // Dummy user data
@@ -95,6 +96,9 @@ export default function DashboardPage() {
 
         {/* Fitbit Data Card */}
         <FitbitDataCard />
+        
+        {/* Fitbit History Card */}
+        <FitbitHistoryCard limit={30} />
       </VStack>
     </Box>
   );

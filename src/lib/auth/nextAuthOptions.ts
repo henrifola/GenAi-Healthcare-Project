@@ -1,6 +1,7 @@
 // lib/auth/nextAuthOptions.ts
 import type { NextAuthOptions, Session } from 'next-auth';
 import type { JWT } from 'next-auth/jwt';
+import { jwtDecode } from 'jwt-decode';
 
 declare module 'next-auth' {
   interface Session {
@@ -20,6 +21,15 @@ declare module 'next-auth/jwt' {
 }
 
 export const nextAuthOptions: NextAuthOptions = {
+  // JWT 암호화를 위한 비밀키 설정
+  secret: process.env.NEXTAUTH_SECRET || 'HARU_CARE_JWT_SECRET_KEY',
+  
+  // JWT 설정
+  session: {
+    strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 30, // 30일
+  },
+  
   providers: [
     // Fitbit OAuth Provider 구현
     {
@@ -69,4 +79,5 @@ export const nextAuthOptions: NextAuthOptions = {
   pages: {
     signIn: '/login'
   },
+  debug: process.env.NODE_ENV === 'development',
 };

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { nextAuthOptions } from '@/lib/auth/nextAuthOptions';
+import connectDB from '@/lib/db/mongoose';
+import User from '@/lib/db/models/user.model';
+import FitbitActivity from '@/lib/db/models/fitbit-activity.model';
+import mongoose from 'mongoose';
+import { jwtDecode } from 'jwt-decode';
 
 // Fitbit API 기본 URL (버전 1로 고정)
 const FITBIT_API_URL = 'https://api.fitbit.com/1';
@@ -16,6 +21,53 @@ interface CacheItem {
 
 const cache: Record<string, CacheItem> = {};
 const CACHE_TTL = 5 * 60 * 1000; // 캐시 유효시간: 5분
+
+// 세션 쿠키에서 JWT 토큰을 추출하는 함수
+async function getTokenFromRequest(req: NextRequest) {
+  try {
+    // 헤더에서 커스텀 토큰 확인
+    const fitbitToken = req.headers.get('x-fitbit-token');
+    if (fitbitToken) {
+      return { token: fitbitToken, source: 'header' };
+    }
+
+    // 쿠키에서 세션 토큰 확인
+    const sessionToken = req.cookies.get('next-auth.session-token')?.value || 
+                         req.cookies.get('__Secure-next-auth.session-token')?.value;
+    
+    if (!sessionToken) {
+      return { token: null, source: null };
+    }
+    
+    try {
+      // JWT 디코딩 시도 - 안전하게 처리
+      try {
+        // 먼저 표준 JWT 토큰으로 디코딩 시도
+        const decoded = jwtDecode<any>(sessionToken);
+        return { 
+          token: decoded.accessToken, 
+          source: 'cookie',
+          decoded
+        };
+      } catch (decodeError) {
+        console.error('표준 JWT 디코딩 실패, 세션 쿠키로 처리 시도:', decodeError);
+        
+        // NextAuth의 암호화된 쿠키일 수 있으므로 세션 조회 방식으로 전환
+        return { 
+          token: null, 
+          source: 'session',
+          error: decodeError 
+        };
+      }
+    } catch (e) {
+      console.error('JWT 디코딩 오류:', e);
+      return { token: null, source: null, error: e };
+    }
+  } catch (e) {
+    console.error('토큰 추출 오류:', e);
+    return { token: null, source: null, error: e };
+  }
+}
 
 // 캐시에서 데이터 가져오기
 function getCachedData(cacheKey: string): any | null {
@@ -155,36 +207,117 @@ async function fetchFitbitDataFromServer(url: string, accessToken: string, retry
   }
 }
 
+// MongoDB에 사용자 및 Fitbit 데이터 저장하는 함수
+async function saveUserDataToDb(session: any, date: string, fitbitData: any) {
+  try {
+    await connectDB();
+    
+    // 이메일로 사용자 조회 또는 생성
+    const userEmail = session.user?.email || `${session.fitbitId || 'unknown'}@fitbit.user`;
+    
+    let user = await User.findOne({ email: userEmail });
+    
+    // 사용자가 없으면 새로 생성
+    if (!user) {
+      user = await User.create({
+        name: session.user?.name || 'Fitbit User',
+        email: userEmail,
+        image: session.user?.image,
+        fitbitId: session.fitbitId || session.user?.id,
+      });
+      console.log('새 사용자 생성됨:', user._id);
+    }
+    
+    // Fitbit 활동 데이터 저장 또는 업데이트
+    const activityData = {
+      userId: user._id,
+      date: date,
+      data: {
+        summary: fitbitData.activity?.summary || null,
+        heart: fitbitData.heart || null,
+        sleep: fitbitData.sleep || null,
+        hrv: fitbitData.hrv || null,
+        activities: fitbitData.activity?.activities || [],
+      }
+    };
+    
+    // upsert: true - 데이터가 없으면 생성, 있으면 업데이트
+    await FitbitActivity.findOneAndUpdate(
+      { userId: user._id, date: date },
+      activityData,
+      { upsert: true, new: true }
+    );
+    
+    console.log('Fitbit 데이터 저장 완료:', date);
+    return true;
+  } catch (error) {
+    console.error('MongoDB 저장 오류:', error);
+    return false;
+  }
+}
+
 // 진행 중인 요청 추적을 위한 객체
 const pendingRequests: Record<string, Promise<any>> = {};
 
 export async function GET(request: NextRequest) {
   try {
-    // 로그인 정보 확인
-    const session: any = await getServerSession(nextAuthOptions);
+    let session: any = null;
+    let accessToken: string | null = null;
     
-    if (!session) {
-      console.log('세션 없음');
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
+    // 1. 커스텀 헤더 확인
+    const fitbitToken = request.headers.get('x-fitbit-token');
+    const authUser = request.headers.get('x-auth-user');
+    
+    if (fitbitToken) {
+      // 커스텀 헤더에서 토큰을 받은 경우
+      accessToken = fitbitToken;
+      session = {
+        accessToken: fitbitToken,
+        provider: 'fitbit',
+        user: {
+          email: authUser || 'unknown@fitbit.user',
+        }
+      };
+      console.log('커스텀 헤더에서 인증 정보 사용');
+    } else {
+      // 2. 쿠키에서 토큰 추출 시도
+      const tokenInfo = await getTokenFromRequest(request);
+      
+      if (tokenInfo.token) {
+        accessToken = tokenInfo.token;
+        session = {
+          accessToken: tokenInfo.token,
+          provider: 'fitbit',
+          user: tokenInfo.decoded || { email: 'unknown@fitbit.user' }
+        };
+        console.log(`쿠키에서 토큰 추출 성공 (${tokenInfo.source})`);
+      } else {
+        // 3. 기존 NextAuth 세션 사용
+        session = await getServerSession(nextAuthOptions);
+        
+        if (session) {
+          accessToken = session.accessToken;
+        }
+      }
     }
     
     // 세션 정보 확인
     console.log('세션 정보:', {
       hasSession: !!session,
-      provider: session.provider,
-      hasAccessToken: !!session.accessToken,
-      tokenLength: session.accessToken ? session.accessToken.length : 0
+      provider: session?.provider,
+      hasAccessToken: !!accessToken,
+      tokenLength: accessToken ? accessToken.length : 0
     });
     
     // 토큰 검증
-    if (!session.accessToken) {
+    if (!accessToken) {
       console.log('액세스 토큰 없음');
-      return NextResponse.json({ error: 'Fitbit 액세스 토큰이 없습니다.' }, { status: 403 });
+      return NextResponse.json({ error: 'Fitbit 액세스 토큰이 없습니다. 재로그인이 필요합니다.' }, { status: 403 });
     }
     
-    if (session.provider !== 'fitbit') {
-      console.log('Fitbit 제공자 아님:', session.provider);
-      return NextResponse.json({ error: 'Fitbit 인증이 필요합니다.' }, { status: 403 });
+    if (!session) {
+      console.log('세션 없음');
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 });
     }
     
     // 요청 파라미터 가져오기
@@ -200,7 +333,7 @@ export async function GET(request: NextRequest) {
     }
     
     // 요청 키 생성 (중복 요청 방지)
-    const requestKey = `${dataType}_${date}_${session.accessToken.substring(0, 10)}`;
+    const requestKey = `${dataType}_${date}_${accessToken.substring(0, 10)}`;
     
     // 이미 진행 중인 동일한 요청이 있는지 확인
     if (pendingRequests[requestKey]) {
@@ -219,7 +352,6 @@ export async function GET(request: NextRequest) {
     }
     
     let data = {};
-    const accessToken = session.accessToken;
     
     // 각 데이터 타입에 따라 요청 처리 (Promise 생성)
     const fetchDataPromise = (async () => {
@@ -272,6 +404,9 @@ export async function GET(request: NextRequest) {
               if (Object.keys(data).length === 0) {
                 throw new Error('모든 데이터를 가져오는데 실패했습니다.');
               }
+              
+              // MongoDB에 데이터 저장
+              await saveUserDataToDb(session, date, data);
             } catch (e) {
               console.error('모든 데이터 가져오기 실패, 가능한 데이터 반환:', e);
               if (Object.keys(data).length === 0) {
@@ -316,9 +451,9 @@ export async function GET(request: NextRequest) {
           message: error.message,
           dataType: dataType,
           debug: {
-            provider: session.provider,
-            hasToken: !!session.accessToken,
-            tokenLength: session.accessToken?.length
+            provider: session?.provider,
+            hasToken: !!accessToken,
+            tokenLength: accessToken?.length
           }
         }, 
         { status: error.status || 500 }

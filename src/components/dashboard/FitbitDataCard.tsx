@@ -134,7 +134,8 @@ const FitbitDataCard = () => {
     if (!session || !session.accessToken) {
       setFitbitData(prev => ({
         ...prev,
-        error: '세션 정보가 없거나 액세스 토큰이 없습니다.'
+        loading: false,
+        error: '세션 정보가 없거나 액세스 토큰이 없습니다. 재로그인이 필요합니다.'
       }));
       return;
     }
@@ -188,6 +189,10 @@ const FitbitDataCard = () => {
         if (response.status === 429) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.message || 'Fitbit API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.');
+        }
+
+        if (response.status === 403) {
+          throw new Error('Fitbit 데이터를 가져오는데 실패했습니다: 액세스 권한이 없습니다. 로그아웃 후 다시 로그인해 주세요.');
         }
         
         if (!response.ok) {
@@ -245,10 +250,18 @@ const FitbitDataCard = () => {
         error.message.includes('요청 한도')
       );
       
+      // 에러 메시지 개선
+      let errorMessage = error.message || '데이터를 불러오는데 문제가 발생했습니다';
+      
+      // 403 에러의 경우 더 명확한 메시지 제공
+      if (error.message && error.message.includes('403')) {
+        errorMessage = '인증이 만료되었습니다. 로그아웃 후 다시 로그인해 주세요.';
+      }
+      
       setFitbitData(prev => ({
         ...prev,
         loading: false,
-        error: error.message || '데이터를 불러오는데 문제가 발생했습니다',
+        error: errorMessage,
         profile: isRateLimitError ? prev.profile : prev.profile,
         activity: isRateLimitError ? prev.activity : prev.activity,
         sleep: isRateLimitError ? prev.sleep : prev.sleep,
@@ -463,7 +476,7 @@ const FitbitDataCard = () => {
               <Text fontSize="sm" color="gray.500" mt={2}>칼로리</Text>
               <Flex align="baseline">
                 <Text fontSize="3xl" fontWeight="bold">
-                  {activityData?.caloriesOut || mockTrendData.calories.value}
+                  {activityData?.caloriesOut ? activityData.caloriesOut.toLocaleString() : mockTrendData.calories.value.toLocaleString()}
                 </Text>
                 <Text ml={1} fontSize="md" color="gray.500">kcal</Text>
               </Flex>
