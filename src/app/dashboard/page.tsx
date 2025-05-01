@@ -76,8 +76,8 @@ export default function DashboardPage() {
         <Flex justify="space-between" align="center">
           <HStack spacing={4}>
             <Avatar
-              src={dummyUser.avatar}
-              name={dummyUser.name}
+              src={session.user?.image || dummyUser.avatar}
+              name={session.user?.name || dummyUser.name}
               size="lg"
               boxShadow="md"
             />

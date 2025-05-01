@@ -174,6 +174,7 @@ async function saveUserDataToDb(session: any, date: string, fitbitData: any) {
         summary: fitbitData.activity?.summary || null,
         heart: fitbitData.heart || null,
         sleep: fitbitData.sleep || null,
+        sleepGoal: fitbitData.sleepGoal || null,
         hrv: fitbitData.hrv || null,
         activities: fitbitData.activity?.activities || []
       }
@@ -298,11 +299,15 @@ export async function GET(request: NextRequest) {
           case 'heart':
             data = await fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken);
             break;
+
+          case 'sleepGoal':
+            data = await fetchFitbitDataFromServer('/user/-/sleep/goal.json', accessToken);
+            break;
             
           case 'all':
             try {
               // 모든 데이터 병렬로 가져오기
-              const [profile, activity, sleep, heart] = await Promise.all([
+              const [profile, activity, sleep, heart, sleepGoal] = await Promise.all([
                 fetchFitbitDataFromServer('/user/-/profile.json', accessToken).catch(e => {
                   return null;
                 }),
@@ -314,6 +319,9 @@ export async function GET(request: NextRequest) {
                 }),
                 fetchFitbitDataFromServer(`/user/-/activities/heart/date/${date}/1d.json`, accessToken).catch(e => {
                   return null;
+                }),
+                fetchFitbitDataFromServer('/user/-/sleep/goal.json', accessToken).catch(e => {
+                  return null;
                 })
               ]);
               
@@ -322,10 +330,28 @@ export async function GET(request: NextRequest) {
                 ...(activity ? { activity } : {}),
                 ...(sleep ? { sleep } : {}),
                 ...(heart ? { heart } : {}),
+                ...(sleepGoal ? { sleepGoal } : {}),
               };
               
               if (Object.keys(data).length === 0) {
                 throw new Error('모든 데이터를 가져오는데 실패했습니다.');
+              }
+              
+              // 7일 전 수면 데이터 가져오기 (비교용)
+              try {
+                const pastDate = new Date(date);
+                pastDate.setDate(pastDate.getDate() - 7);
+                const pastDateString = `${pastDate.getFullYear()}-${String(pastDate.getMonth() + 1).padStart(2, '0')}-${String(pastDate.getDate()).padStart(2, '0')}`;
+                
+                const pastSleepData = await fetchFitbitDataFromServer(`/user/-/sleep/date/${pastDateString}.json`, accessToken).catch(e => null);
+                if (pastSleepData) {
+                  data = {
+                    ...data,
+                    pastSleep: pastSleepData
+                  };
+                }
+              } catch (e) {
+                console.log('7일 전 수면 데이터 가져오기 실패, 계속 진행');
               }
               
               // MongoDB에 데이터 저장

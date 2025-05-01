@@ -66,7 +66,12 @@ export async function POST(request: NextRequest) {
       const batchPromises = batch.map(async (date) => {
         try {
           // 직접 Fitbit 사용자 데이터 API 엔드포인트 호출
-          const apiUrl = new URL(`/api/fitbit/user-data`, process.env.NEXTAUTH_URL);
+          // const apiUrl = new URL(`/api/fitbit/user-data`, process.env.NEXTAUTH_URL);
+          const baseUrl = process.env.NEXTAUTH_URL || 'http://localhost:3000';
+          if (!process.env.NEXTAUTH_URL) {
+            console.warn('Warning: NEXTAUTH_URL is not defined. Using fallback value "http://localhost:3000".');
+          }
+          const apiUrl = new URL(`/api/fitbit/user-data`, baseUrl);
           apiUrl.searchParams.append('date', date);
           apiUrl.searchParams.append('type', 'all');
 
