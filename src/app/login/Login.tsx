@@ -1,7 +1,7 @@
 import React from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/router';
-import GoogleLoginButton from '@/components/auth/GoogleLoginButton';
+import FitbitLoginButton from '@/components/auth/FitbitLoginButton';
 
 const LoginPage: React.FC = () => {
   const { data: session } = useSession();
@@ -15,7 +15,7 @@ const LoginPage: React.FC = () => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <h1>Login</h1>
-      <GoogleLoginButton />
+      <FitbitLoginButton />
     </div>
   );
 };

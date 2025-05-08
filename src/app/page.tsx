@@ -3,7 +3,7 @@
 import { Box, Button, Container, Heading, Text, Flex } from '@chakra-ui/react';
 import { FiHeart, FiActivity } from 'react-icons/fi';
 import { useRouter } from 'next/navigation';
-import { useSession } from 'next-auth/react';
+import { useSession, signIn } from 'next-auth/react';
 import { useEffect } from 'react';
 
 export default function LandingPage() {
@@ -17,7 +17,8 @@ export default function LandingPage() {
   }, [session, router]);
 
   const handleLogin = () => {
-    router.push('/api/auth/signin');
+    // Fitbit 로그인으로 직접 연결
+    signIn('fitbit', { callbackUrl: '/dashboard' });
   };
 
   // If session is loading or user is authenticated, show nothing
