@@ -43,14 +43,47 @@ export const nextAuthOptions: NextAuthOptions = {
         }
       },
       token: "https://api.fitbit.com/oauth2/token",
-      userinfo: "https://api.fitbit.com/1/user/-/profile.json",
+      userinfo: {
+        url: "https://api.fitbit.com/1/user/-/profile.json",
+        async request({ tokens, provider }) {
+          const MAX_RETRIES = 3;
+          const RETRY_DELAY_MS = 2000; // 2 seconds
+
+          for (let i = 0; i < MAX_RETRIES; i++) {
+            try {
+              const response = await fetch((provider.userinfo as any).url, {
+                headers: {
+                  Authorization: `Bearer ${tokens.access_token}`,
+                },
+              });
+
+              if (response.status === 429) {
+                console.warn(`Fitbit API rate limit hit. Retrying in ${RETRY_DELAY_MS / 1000} seconds... (Attempt ${i + 1}/${MAX_RETRIES})`);
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+                continue; // Retry
+              }
+
+              if (!response.ok) {
+                throw new Error(`Failed to fetch user profile from Fitbit: ${response.status} ${response.statusText}`);
+              }
+
+              return await response.json();
+            } catch (error) {
+              console.error(`Error fetching Fitbit user profile (attempt ${i + 1}/${MAX_RETRIES}):`, error);
+              if (i === MAX_RETRIES - 1) throw error; // Re-throw if last attempt failed
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            }
+          }
+          throw new Error('Failed to fetch user profile from Fitbit after multiple retries.');
+        },
+      },
       profile: (profile: any) => {
         return {
           id: profile.user.encodedId,
           name: `${profile.user.firstName} ${profile.user.lastName}`,
           email: profile.user.email || `${profile.user.encodedId}@fitbit.user`,
           image: profile.user.avatar150 || profile.user.avatar,
-        }
+        };
       },
       clientId: process.env.FITBIT_CLIENT_ID || '',
       clientSecret: process.env.FITBIT_CLIENT_SECRET || '',
