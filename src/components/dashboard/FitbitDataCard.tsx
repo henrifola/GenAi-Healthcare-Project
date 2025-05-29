@@ -54,7 +54,7 @@ import {
 } from 'react-icons/fi';
 import { format, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { fetchHealthInsights, generateFallbackInsights, type HealthData, type HealthInsights } from '@/utils/gpt';
+import { fetchHealthInsights, generateFallbackInsights, type HealthData, type HealthInsights } from '@/utils/gemini';
 import ReactMarkdown from 'react-markdown';
 
 interface TrendData {

@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { nextAuthOptions } from '@/lib/auth/nextAuthOptions';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// OpenAI API URL 및 키
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Gemini API 키 및 모델 설정
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-pro';
 
-// GPT 모델 및 매개변수 설정
-const GPT_MODEL = process.env.OPENAI_MODEL || 'gpt-4-turbo'; // 환경변수에서 모델을 가져오거나 기본값 사용
+// Gemini 모델 초기화
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
+
+// Gemini 모델 및 매개변수 설정
 const MAX_TOKENS = 800;
 const TEMPERATURE = 0.7;
 
@@ -27,46 +30,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '건강 데이터가 필요합니다.' }, { status: 400 });
     }
     
-    // OpenAI API 키 확인
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API 키가 설정되지 않았습니다.');
+    // Gemini API 키 확인
+    if (!GEMINI_API_KEY) {
+      console.error('Gemini API 키가 설정되지 않았습니다.');
       return NextResponse.json({ error: 'API 구성이 올바르지 않습니다.' }, { status: 500 });
     }
     
-    // GPT 프롬프트 생성
-    const gptPrompt = createHealthInsightPrompt(healthData);
+    // Gemini 프롬프트 생성
+    const geminiPrompt = createHealthInsightPrompt(healthData);
     
-    // OpenAI API 호출
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: GPT_MODEL,
-        messages: [
-          {
-            role: 'system',
-            content: '당신은 개인 건강 데이터를 분석하고 통찰력 있는 조언과 추천을 제공하는 전문 건강 어시스턴트입니다. 의학적 증거를 기반으로 항상 정확하고 유용한 정보를 친근하고 도움이 되는 방식으로 제공하세요.'
-          },
-          { 
-            role: 'user', 
-            content: gptPrompt 
-          }
-        ],
-        max_tokens: MAX_TOKENS,
+    // Gemini API 호출
+    const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: geminiPrompt }] }],
+      generationConfig: {
+        maxOutputTokens: MAX_TOKENS,
         temperature: TEMPERATURE,
-      })
+      },
     });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(`OpenAI API 오류: ${response.status} ${response.statusText} ${JSON.stringify(errorData)}`);
-    }
-    
-    const data = await response.json();
-    const insightText = data.choices[0]?.message?.content;
+
+    const response = result.response;
+    const insightText = response.text();
     
     if (!insightText) {
       throw new Error('AI 응답을 받을 수 없습니다.');
@@ -81,7 +66,7 @@ export async function POST(request: NextRequest) {
     });
     
   } catch (error: any) {
-    console.error('GPT 건강 인사이트 생성 오류:', error);
+    console.error('Gemini 건강 인사이트 생성 오류:', error);
     return NextResponse.json({ 
       error: '건강 인사이트를 생성하는 중 오류가 발생했습니다.', 
       message: error.message 
@@ -89,7 +74,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GPT에 전송할 건강 데이터 프롬프트 생성
+// Gemini에 전송할 건강 데이터 프롬프트 생성
 function createHealthInsightPrompt(healthData: any) {
   const { 
     steps, 
@@ -122,7 +107,7 @@ function createHealthInsightPrompt(healthData: any) {
 `;
 }
 
-// GPT 응답을 구조화된 형식으로 파싱
+// Gemini 응답을 구조화된 형식으로 파싱
 function parseInsights(insightText: string) {
   // 섹션별로 파싱하는 로직 구현
   const sections = {

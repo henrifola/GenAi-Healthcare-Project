@@ -31,7 +31,7 @@ interface GPTResponse {
  */
 export const fetchHealthInsights = async (healthData: HealthData): Promise<GPTResponse | null> => {
   try {
-    const response = await fetch('/api/gpt', {
+    const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
