@@ -7,6 +7,7 @@ interface HealthData {
   hrvValue: number;
   calories: number;
   activeMinutes: number;
+  analysisContext?: string; // 선택한 날짜 기준 최근 1주일 데이터를 기반으로 분석 중임을 명시하는 필드
 }
 
 interface HealthInsights {
