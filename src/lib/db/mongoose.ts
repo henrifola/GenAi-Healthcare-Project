@@ -11,10 +11,10 @@ if (!MONGODB_URI) {
 /**
  * 전역 mongoose 연결 객체 관리
  */
-let cached = global.mongoose;
+let cached = (global as any).mongoose;
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+  cached = (global as any).mongoose = { conn: null, promise: null };
 }
 
 async function connectDB() {
