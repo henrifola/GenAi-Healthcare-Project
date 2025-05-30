@@ -4515,7 +4515,7 @@ async function getTokenFromRequest(req: NextRequest) {
       count: validData.length,
       data: validData
     });
-````
+```
 
 
 변경했습니다.

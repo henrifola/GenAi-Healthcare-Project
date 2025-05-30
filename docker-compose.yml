@@ -18,6 +18,30 @@ services:
     networks:
       - harucare-network
 
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: harucare-app
+    ports:
+      - "3000:3000"
+    environment:
+      # 환경 변수는 .env 파일에서 로드됩니다.
+      # Docker Compose가 .env 파일을 자동으로 로드합니다.
+      # 필요한 경우 여기에 명시적으로 추가하거나, .env 파일에 정의하세요.
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DB}?authSource=admin
+      - FITBIT_CLIENT_ID=${FITBIT_CLIENT_ID}
+      - FITBIT_CLIENT_SECRET=${FITBIT_CLIENT_SECRET}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+    depends_on:
+      - mongodb
+    networks:
+      - harucare-network
+    restart: unless-stopped
+
 networks:
   harucare-network:
     driver: bridge

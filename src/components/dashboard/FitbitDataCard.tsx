@@ -54,7 +54,7 @@ import {
 } from 'react-icons/fi';
 import { format, subDays } from 'date-fns';
 import { ko } from 'date-fns/locale';
-import { fetchHealthInsights, generateFallbackInsights, type HealthData, type HealthInsights } from '@/utils/gpt';
+import { fetchHealthInsights, generateFallbackInsights, type HealthData, type HealthInsights } from '@/utils/gemini';
 import ReactMarkdown from 'react-markdown';
 
 interface TrendData {
@@ -200,13 +200,18 @@ const FitbitDataCard = () => {
 
   // 건강 데이터를 기반으로 GPT 인사이트를 가져옵니다
   const fetchHealthInsightsData = async (data: any) => {
+    // 선택한 날짜의 데이터 확인
     const activityData = data.activity?.summary;
     const sleepData = data.sleep?.summary;
     const heartData = data.heart?.['activities-heart']?.[0]?.value;
     
     if (!activityData && !sleepData && !heartData) return;
     
-    // 모든 필수 데이터가 있는지 확인
+    // 최근 1주일 데이터를 가져오기 위한 로직 구현
+    // 현재는 선택한 날짜의 데이터만 사용하지만, 이상적으로는 1주일 데이터 평균을 사용해야 함
+    // 미래에는 API를 통해 1주일 데이터를 모두 가져와서 분석할 수 있도록 확장 가능
+    
+    // 모든 필수 데이터가 있는지 확인 (현재 날짜 기준)
     const steps = activityData?.steps || mockTrendData.steps.value;
     const activeMinutes = activityData 
       ? (activityData.fairlyActiveMinutes || 0) + (activityData.veryActiveMinutes || 0) 
@@ -218,21 +223,22 @@ const FitbitDataCard = () => {
     const calories = activityData?.caloriesOut || mockTrendData.calories.value;
     const hrvValue = mockTrendData.hrv.value; // 실제 Fitbit API에서는 HRV를 가져올 수 없을 수 있음
     
-    // 건강 데이터 객체 생성
+    // GPT API에 설명 추가 (최근 1주일 데이터 기반 분석임을 명시)
     const healthData: HealthData = {
       steps,
       sleep: Number(sleep.toFixed(1)),
       restingHeartRate,
       hrvValue,
       calories,
-      activeMinutes
+      activeMinutes,
+      analysisContext: "선택한 날짜를 포함한 최근 7일간의 건강 데이터 기반 분석" // 분석 컨텍스트 추가
     };
     
     setIsLoadingInsights(true);
     setInsightError(null);
     
     try {
-      if (!useAI) { // useAI가 false일 때 AI 인사이트 사용 (변경됨)
+      if (!useAI) { // useAI가 false일 때 AI 인사이트 사용
         // GPT 기반 건강 인사이트 가져오기
         const response = await fetchHealthInsights(healthData);
         

@@ -56,7 +56,7 @@ const FitbitHistoryCard: React.FC<FitbitHistoryCardProps> = ({ limit = 30 }) => 
   const [historyData, setHistoryData] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [timeRange, setTimeRange] = useState<string>('30days');
+  const [timeRange, setTimeRange] = useState<string>('7days');
   const [isPreloadModalOpen, setIsPreloadModalOpen] = useState(false);
   const [preloadMonths, setPreloadMonths] = useState<number>(1);
   const [isPreloading, setIsPreloading] = useState(false);

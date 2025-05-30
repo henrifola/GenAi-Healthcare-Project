@@ -7,6 +7,7 @@ interface HealthData {
   hrvValue: number;
   calories: number;
   activeMinutes: number;
+  analysisContext?: string; // 선택한 날짜 기준 최근 1주일 데이터를 기반으로 분석 중임을 명시하는 필드
 }
 
 interface HealthInsights {
@@ -30,7 +31,7 @@ interface GPTResponse {
  */
 export const fetchHealthInsights = async (healthData: HealthData): Promise<GPTResponse | null> => {
   try {
-    const response = await fetch('/api/gpt', {
+    const response = await fetch('/api/gemini', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

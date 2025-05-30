@@ -9,7 +9,7 @@ else
 fi
 
 # Docker Compose 실행
-docker-compose up -d mongodb
+docker compose up -d mongodb
 
 echo "MongoDB가 시작되었습니다."
 echo "연결 문자열: $MONGODB_URI"

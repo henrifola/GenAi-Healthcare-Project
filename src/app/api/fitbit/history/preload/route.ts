@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       processed: 0, 
       succeeded: 0, 
       failed: 0,
-      errors: [] 
+      errors: [] as { date: string; error: string }[]
     };
     
     for (let i = 0; i < dateRange.length; i += batchSize) {
