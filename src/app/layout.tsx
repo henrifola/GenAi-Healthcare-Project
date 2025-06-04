@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Inter } from 'next/font/google';
+import { Press_Start_2P } from 'next/font/google';
 import '../styles/globals.css';
 import ClientLayout from '@/app/ClientLayout';
 
-const geistSans = Geist({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-geist-sans',
+  variable: '--font-inter',
 });
 
-const geistMono = Geist_Mono({
+const pressStart2P = Press_Start_2P({
+  weight: '400',
   subsets: ['latin'],
-  variable: '--font-geist-mono',
+  variable: '--font-press-start',
 });
 
 export const metadata: Metadata = {
@@ -25,7 +27,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+      </head>
+      <body className={`${inter.variable} ${pressStart2P.variable} font-sans`}>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

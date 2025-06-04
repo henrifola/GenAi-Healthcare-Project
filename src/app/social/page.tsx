@@ -5,358 +5,357 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   Box,
-  Button,
+  Container,
   Heading,
   VStack,
-  HStack,
-  Input,
-  InputGroup,
-  InputLeftElement,
-  Tab,
-  TabList,
-  Tabs,
   Text,
-  Avatar,
-  AvatarGroup,
   SimpleGrid,
-  Card,
-  CardBody,
-  Progress,
-  IconButton,
-  Icon,
-  useToast,
-  Container,
-  Link,
+  useColorModeValue,
 } from '@chakra-ui/react';
-import { FiSearch, FiUserPlus, FiAward, FiArrowLeft } from 'react-icons/fi';
+import { keyframes } from '@emotion/react';
+import AvatarRace from '@/components/social/AvatarRace';
+import SocialRankingCard from '@/components/social/SocialRankingCard';
+import ChallengeCard from '@/components/social/ChallengeCard';
+import EmotionShareCard from '@/components/social/EmotionShareCard';
 
-// Dummy data - replace with API calls later
-const dummyFriends = [
-  {
-    id: 1,
-    name: 'Sarah Chen',
-    steps: 12453,
-    avatar: 'https://i.pravatar.cc/150?img=1',
-  },
-  {
-    id: 2,
-    name: 'Mike Johnson',
-    steps: 9876,
-    avatar: 'https://i.pravatar.cc/150?img=2',
-  },
-  {
-    id: 3,
-    name: 'Emma Davis',
-    steps: 8654,
-    avatar: 'https://i.pravatar.cc/150?img=3',
-  },
-  {
-    id: 4,
-    name: 'Alex Kim',
-    steps: 7890,
-    avatar: 'https://i.pravatar.cc/150?img=4',
-  },
-  {
-    id: 5,
-    name: 'Lisa Park',
-    steps: 6543,
-    avatar: 'https://i.pravatar.cc/150?img=5',
-  },
-];
-
-const dummySearchResults = [
-  { id: 6, name: 'John Smith', avatar: 'https://i.pravatar.cc/150?img=6' },
-  { id: 7, name: 'Maria Garcia', avatar: 'https://i.pravatar.cc/150?img=7' },
-];
-
-// Add time-range specific data
-const timeRangeData = {
-  today: dummyFriends,
-  week: [
-    { ...dummyFriends[0], steps: 82453 },
-    { ...dummyFriends[1], steps: 76890 },
-    { ...dummyFriends[3], steps: 71234 }, // Alex moved up
-    { ...dummyFriends[2], steps: 68654 },
-    { ...dummyFriends[4], steps: 45678 },
-  ],
-  month: [
-    { ...dummyFriends[1], steps: 342123 }, // Mike moved to first
-    { ...dummyFriends[0], steps: 328654 },
-    { ...dummyFriends[4], steps: 312890 }, // Lisa moved up
-    { ...dummyFriends[2], steps: 298765 },
-    { ...dummyFriends[3], steps: 287654 },
-  ],
-  year: [
-    { ...dummyFriends[4], steps: 4123456 }, // Lisa moved to first
-    { ...dummyFriends[1], steps: 3987654 },
-    { ...dummyFriends[0], steps: 3876543 },
-    { ...dummyFriends[2], steps: 3654321 },
-    { ...dummyFriends[3], steps: 3543210 },
-  ],
+// Pixel font style
+const pixelFontStyle = {
+  fontFamily: "var(--font-press-start)",
 };
 
-type TimeRange = 'today' | 'week' | 'month' | 'year';
+// Animation keyframes
+const float = keyframes`
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+`;
 
-interface SearchResult {
-  id: number;
-  name: string;
-  avatar: string;
-}
+const glitch = keyframes`
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+`;
+
+const shine = keyframes`
+  0% { background-position: -100px; }
+  100% { background-position: 200px; }
+`;
 
 export default function SocialPage() {
   const { data: session } = useSession();
   const router = useRouter();
-  const toast = useToast();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [timeRange, setTimeRange] = useState<TimeRange>('today');
-  const [showSearch, setShowSearch] = useState(false);
-  const [friends, setFriends] = useState(timeRangeData.today);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!session) {
       router.push('/login');
     }
+    // Simulate loading
+    const timer = setTimeout(() => setLoading(false), 2000);
+    return () => clearTimeout(timer);
   }, [session, router]);
 
-  // Add effect to update friends when timeRange changes
-  useEffect(() => {
-    setFriends(timeRangeData[timeRange]);
-  }, [timeRange]);
+  const bgColor = useColorModeValue('navy.900', 'navy.900');
+  const headingColor = useColorModeValue('pink.300', 'pink.200');
+  const glowColor = useColorModeValue('purple.500', 'purple.400');
 
-  if (!session) {
-    return null;
+  if (!session) return null;
+
+  if (loading) {
+    return (
+      <Box
+        minH="100vh"
+        bg={bgColor}
+        color="white"
+        display="flex"
+        flexDirection="column"
+        alignItems="center"
+        justifyContent="center"
+        position="relative"
+        overflow="hidden"
+        css={{
+          background: 'linear-gradient(to bottom, #2a0e61, #1a0628)',
+        }}
+      >
+        <Box
+          sx={pixelFontStyle}
+          fontSize="4xl"
+          mb={8}
+          color={headingColor}
+          textShadow="0 0 10px #fff, 0 0 20px #fff, 0 0 30px #e60073, 0 0 40px #e60073"
+          animation={`${glitch} 1s infinite`}
+        >
+          SOCIAL HUB
+        </Box>
+        <Box
+          w="300px"
+          h="30px"
+          bg="gray.800"
+          borderRadius="md"
+          overflow="hidden"
+          position="relative"
+          border="2px solid"
+          borderColor={glowColor}
+        >
+          <Box
+            h="100%"
+            w="60%"
+            bg="linear-gradient(to right, transparent, pink.400, transparent)"
+            animation={`${shine} 1s infinite linear`}
+          />
+          <Text
+            position="absolute"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -50%)"
+            sx={pixelFontStyle}
+            fontSize="sm"
+          >
+            Loading...
+          </Text>
+        </Box>
+      </Box>
+    );
   }
 
-  const handleAddFriend = (friend: SearchResult) => {
-    setFriends([
-      ...friends,
-      { ...friend, steps: Math.floor(Math.random() * 10000) },
-    ]);
-    setSearchQuery('');
-    toast({
-      title: 'Friend added!',
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-  };
-
-  const getTimeRangeLabel = (range: TimeRange) => {
-    switch (range) {
-      case 'today':
-        return "Today's";
-      case 'week':
-        return "This Week's";
-      case 'month':
-        return "This Month's";
-      case 'year':
-        return "This Year's";
-    }
-  };
-
-  const maxSteps = Math.max(...dummyFriends.map((f) => f.steps));
-
   return (
-    <Container maxW="container.xl" p={4}>
-      <VStack gap={8} align="stretch">
-        <HStack justify="space-between">
-          <HStack>
-            <IconButton
-              aria-label="Back to dashboard"
-              icon={<FiArrowLeft />}
-              variant="ghost"
-              onClick={() => router.push('/dashboard')}
-            />
-            <Heading size="lg">Social Fitness</Heading>
-          </HStack>
-          <Button
-            leftIcon={<Icon as={showSearch ? FiAward : FiSearch} />}
-            onClick={() => setShowSearch(!showSearch)}
-          >
-            {showSearch ? 'View Rankings' : 'Find Friends'}
-          </Button>
-        </HStack>
+    <Box
+      minH="100vh"
+      position="relative"
+      overflow="hidden"
+      css={{
+        background: 'linear-gradient(to bottom, #2a0e61, #1a0628)',
+      }}
+    >
+      {/* Grid background */}
+      <Box
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        opacity={0.1}
+        css={{
+          backgroundImage: 'linear-gradient(#9333ea 1px, transparent 1px), linear-gradient(to right, #9333ea 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
 
-        {showSearch ? (
-          <Card>
-            <CardBody>
-              <VStack align="stretch" gap={6}>
-                <Heading size="md">Find Friends</Heading>
-                <InputGroup>
-                  <InputLeftElement>
-                    <Icon as={FiSearch} color="gray.400" />
-                  </InputLeftElement>
-                  <Input
-                    placeholder="Search by name or email..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </InputGroup>
+      {/* Stars background */}
+      <Box
+        position="absolute"
+        top={0}
+        left={0}
+        right={0}
+        bottom={0}
+        zIndex={0}
+        opacity={0.5}
+        css={{
+          background: 'radial-gradient(circle at center, #fff 1px, transparent 1px)',
+          backgroundSize: '50px 50px',
+        }}
+      />
 
-                <VStack align="stretch" gap={4}>
-                  {dummySearchResults.map((user) => (
-                    <HStack key={user.id} justify="space-between">
-                      <HStack>
-                        <Avatar src={user.avatar} name={user.name} size="sm" />
-                        <VStack align="start" spacing={0}>
-                          <Text fontWeight="medium">{user.name}</Text>
-                          <Text fontSize="sm" color="gray.500">
-                            {user.id}@example.com
-                          </Text>
-                        </VStack>
-                      </HStack>
-                      <Button
-                        size="sm"
-                        leftIcon={<Icon as={FiUserPlus} />}
-                        onClick={() => handleAddFriend(user)}
-                      >
-                        Add Friend
-                      </Button>
-                    </HStack>
-                  ))}
-                </VStack>
-              </VStack>
-            </CardBody>
-          </Card>
-        ) : (
-          <>
-            <Card>
-              <CardBody>
-                <VStack align="stretch" gap={6}>
-                  <HStack justify="space-between">
-                    <Heading size="md">Your Friends</Heading>
-                    <AvatarGroup size="sm" max={3}>
-                      {dummyFriends.map((friend) => (
-                        <Avatar
-                          key={friend.id}
-                          name={friend.name}
-                          src={friend.avatar}
-                        />
-                      ))}
-                    </AvatarGroup>
-                  </HStack>
+      <Container maxW="container.xl" position="relative" zIndex={1} py={8}>
+        <VStack spacing={12} align="stretch">
+          <Box textAlign="center" mb={8}>
+            <Heading
+              sx={pixelFontStyle}
+              fontSize="5xl"
+              color={headingColor}
+              textShadow="0 0 10px #fff, 0 0 20px #fff, 0 0 30px #e60073, 0 0 40px #e60073"
+              animation={`${float} 3s ease-in-out infinite`}
+              mb={4}
+            >
+              SOCIAL HUB
+            </Heading>
+            <Text
+              sx={pixelFontStyle}
+              fontSize="sm"
+              color="purple.300"
+              letterSpacing="2px"
+            >
+              COMPETE WITH FRIENDS
+            </Text>
+          </Box>
 
-                  <Tabs
-                    variant="soft-rounded"
-                    colorScheme="brand"
-                    onChange={(index) => {
-                      setTimeRange(
-                        ['today', 'week', 'month', 'year'][index] as TimeRange,
-                      );
-                    }}
-                  >
-                    <TabList>
-                      <Tab>Today</Tab>
-                      <Tab>Week</Tab>
-                      <Tab>Month</Tab>
-                      <Tab>Year</Tab>
-                    </TabList>
-                  </Tabs>
+          <VStack spacing={8} align="stretch">
+            {/* Full width race track */}
+            <Box
+              bg="rgba(0, 0, 0, 0.7)"
+              borderRadius="xl"
+              border="2px solid"
+              borderColor={glowColor}
+              p={6}
+              boxShadow="0 0 20px rgba(147, 51, 234, 0.3)"
+              backdropFilter="blur(5px)"
+              position="relative"
+              minH="400px"
+              w="100%"
+              _before={{
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                borderRadius: 'xl',
+                padding: '2px',
+                background: 'linear-gradient(45deg, #e60073, #9333ea)',
+                mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                maskComposite: 'exclude',
+                pointerEvents: 'none',
+              }}
+            >
+              <AvatarRace />
+            </Box>
 
-                  <VStack align="stretch" gap={4}>
-                    <Heading size="sm">
-                      {getTimeRangeLabel(timeRange)} Step Rankings
-                    </Heading>
-                    {friends
-                      .sort((a, b) => b.steps - a.steps)
-                      .map((friend, index) => (
-                        <VStack key={friend.id} align="stretch" gap={2}>
-                          <HStack justify="space-between">
-                            <HStack>
-                              {index < 3 && (
-                                <Text
-                                  fontSize="lg"
-                                  color={
-                                    index === 0
-                                      ? 'yellow.400'
-                                      : index === 1
-                                        ? 'gray.400'
-                                        : 'orange.400'
-                                  }
-                                >
-                                  🏆
-                                </Text>
-                              )}
-                              <Avatar
-                                src={friend.avatar}
-                                name={friend.name}
-                                size="sm"
-                              />
-                              <Text fontWeight="medium">{friend.name}</Text>
-                            </HStack>
-                            <Text>{friend.steps.toLocaleString()} steps</Text>
-                          </HStack>
-                          <Progress
-                            value={(friend.steps / maxSteps) * 100}
-                            size="sm"
-                            colorScheme={index === 0 ? 'brand' : 'gray'}
-                            borderRadius="full"
-                          />
-                        </VStack>
-                      ))}
-                  </VStack>
-                </VStack>
-              </CardBody>
-            </Card>
-
-            {/* Bottom Cards */}
-            <SimpleGrid columns={{ base: 1, md: 2 }} gap={6} mt={8}>
+            {/* Three column layout for rankings, emotions, and challenges */}
+            <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8}>
+              {/* Rankings */}
               <Box
-                bg="white"
-                p={6}
+                bg="rgba(0, 0, 0, 0.7)"
                 borderRadius="xl"
-                boxShadow="sm"
-                display="flex"
-                flexDirection="column"
-                height="100%"
+                border="2px solid"
+                borderColor={glowColor}
+                p={6}
+                boxShadow="0 0 20px rgba(147, 51, 234, 0.3)"
+                backdropFilter="blur(5px)"
+                position="relative"
+                maxH="600px"
+                overflowY="auto"
+                css={{
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: 'rgba(0, 0, 0, 0.1)',
+                    borderRadius: '4px',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: 'rgba(147, 51, 234, 0.5)',
+                    borderRadius: '4px',
+                    '&:hover': {
+                      background: 'rgba(147, 51, 234, 0.7)',
+                    },
+                  },
+                }}
+                _before={{
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 'xl',
+                  padding: '2px',
+                  background: 'linear-gradient(45deg, #e60073, #9333ea)',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  pointerEvents: 'none',
+                }}
               >
-                <Heading size="lg" mb={4}>
-                  Weekly Challenges
-                </Heading>
-                <Text color="gray.600" mb="auto">
-                  Complete challenges with friends to earn badges and stay
-                  motivated!
-                </Text>
-                <Button
-                  as={Link}
-                  href="/social/challenges"
-                  colorScheme="blue"
-                  size="lg"
-                  mt={6}
-                >
-                  View Challenges
-                </Button>
+                <SocialRankingCard />
               </Box>
 
+              {/* Emotions */}
               <Box
-                bg="white"
-                p={6}
+                bg="rgba(0, 0, 0, 0.7)"
                 borderRadius="xl"
-                boxShadow="sm"
-                display="flex"
-                flexDirection="column"
-                height="100%"
+                border="2px solid"
+                borderColor={glowColor}
+                p={6}
+                boxShadow="0 0 20px rgba(147, 51, 234, 0.3)"
+                backdropFilter="blur(5px)"
+                position="relative"
+                maxH="600px"
+                overflowY="auto"
+                css={{
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: 'rgba(0, 0, 0, 0.1)',
+                    borderRadius: '4px',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: 'rgba(147, 51, 234, 0.5)',
+                    borderRadius: '4px',
+                    '&:hover': {
+                      background: 'rgba(147, 51, 234, 0.7)',
+                    },
+                  },
+                }}
+                _before={{
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 'xl',
+                  padding: '2px',
+                  background: 'linear-gradient(45deg, #e60073, #9333ea)',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  pointerEvents: 'none',
+                }}
               >
-                <Heading size="lg" mb={4}>
-                  Group Activities
-                </Heading>
-                <Text color="gray.600" mb="auto">
-                  Plan walks, runs, or workouts with your friends!
-                </Text>
-                <Button
-                  as={Link}
-                  href="/social/activities"
-                  colorScheme="blue"
-                  size="lg"
-                  mt={6}
-                >
-                  Schedule Activity
-                </Button>
+                <EmotionShareCard />
+              </Box>
+
+              {/* Challenges */}
+              <Box
+                bg="rgba(0, 0, 0, 0.7)"
+                borderRadius="xl"
+                border="2px solid"
+                borderColor={glowColor}
+                p={6}
+                boxShadow="0 0 20px rgba(147, 51, 234, 0.3)"
+                backdropFilter="blur(5px)"
+                position="relative"
+                maxH="600px"
+                overflowY="auto"
+                css={{
+                  '&::-webkit-scrollbar': {
+                    width: '8px',
+                  },
+                  '&::-webkit-scrollbar-track': {
+                    background: 'rgba(0, 0, 0, 0.1)',
+                    borderRadius: '4px',
+                  },
+                  '&::-webkit-scrollbar-thumb': {
+                    background: 'rgba(147, 51, 234, 0.5)',
+                    borderRadius: '4px',
+                    '&:hover': {
+                      background: 'rgba(147, 51, 234, 0.7)',
+                    },
+                  },
+                }}
+                _before={{
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderRadius: 'xl',
+                  padding: '2px',
+                  background: 'linear-gradient(45deg, #e60073, #9333ea)',
+                  mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                  maskComposite: 'exclude',
+                  pointerEvents: 'none',
+                }}
+              >
+                <ChallengeCard />
               </Box>
             </SimpleGrid>
-          </>
-        )}
-      </VStack>
-    </Container>
+          </VStack>
+        </VStack>
+      </Container>
+    </Box>
   );
 }
