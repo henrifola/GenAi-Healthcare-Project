@@ -11,10 +11,13 @@ import {
   Avatar,
   Button,
   Flex,
+  Grid,
+  GridItem,
 } from '@chakra-ui/react';
-import { FiLogOut } from 'react-icons/fi';
+import { FiLogOut, FiUsers } from 'react-icons/fi';
 import FitbitDataCard from '@/components/dashboard/FitbitDataCard';
 import FitbitHistoryCard from '@/components/dashboard/FitbitHistoryCard';
+import SocialRankingCard from '@/components/social/SocialRankingCard';
 import { HealthMetrics } from '@/types/dashboard';
 
 // Dummy user data
@@ -66,6 +69,10 @@ export default function DashboardPage() {
     router.push('/');
   };
 
+  const navigateToSocial = () => {
+    router.push('/social');
+  };
+
   if (!session) {
     return null;
   }
@@ -83,22 +90,43 @@ export default function DashboardPage() {
             />
             <Heading>Welcome back, {session.user?.name || dummyUser.name}</Heading>
           </HStack>
-          <Button
-            leftIcon={<FiLogOut />}
-            onClick={handleLogout}
-            colorScheme="red"
-            variant="ghost"
-            size="md"
-          >
-            Log Out
-          </Button>
+          <HStack spacing={4}>
+            <Button
+              leftIcon={<FiUsers />}
+              onClick={navigateToSocial}
+              colorScheme="green"
+              variant="solid"
+              size="md"
+            >
+              Social Hub
+            </Button>
+            <Button
+              leftIcon={<FiLogOut />}
+              onClick={handleLogout}
+              colorScheme="red"
+              variant="ghost"
+              size="md"
+            >
+              Log Out
+            </Button>
+          </HStack>
         </Flex>
 
-        {/* Fitbit Data Card */}
-        <FitbitDataCard />
-        
-        {/* Fitbit History Card */}
-        <FitbitHistoryCard limit={30} />
+        <Grid templateColumns="repeat(12, 1fr)" gap={6}>
+          <GridItem colSpan={8}>
+            {/* Fitbit Data Card */}
+            <FitbitDataCard />
+            
+            {/* Fitbit History Card */}
+            <Box mt={6}>
+              <FitbitHistoryCard limit={30} />
+            </Box>
+          </GridItem>
+          
+          <GridItem colSpan={4}>
+            <SocialRankingCard />
+          </GridItem>
+        </Grid>
       </VStack>
     </Box>
   );
